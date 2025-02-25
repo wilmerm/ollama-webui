@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
     "markdown-it": "^14.1.0",
     "vue": "^3.5.13",
     "web-streams-polyfill": "^4.1.0"
