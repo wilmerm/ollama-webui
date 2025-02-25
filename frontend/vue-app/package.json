@@ -11,6 +11,7 @@
   "dependencies": {
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",
+    "esbuild": "^0.25.0",
     "markdown-it": "^14.1.0",
     "vue": "^3.5.13",
     "web-streams-polyfill": "^4.1.0"
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
     "vite": "^6.1.0",
-    "vite-plugin-vue-devtools": "^7.7.2"
+    "vite-plugin-vue-devtools": "^7.7.2",
+    "esbuild": "^0.25.0"
   }
 }
