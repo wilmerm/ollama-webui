@@ -2,6 +2,9 @@
 
 Ollama WebUI es una interfaz gráfica web minimalista y fácil de usar, desarrollada con FastAPI y Vue.js, que permite interactuar con modelos de IA locales a través de Ollama.
 
+![image](https://github.com/user-attachments/assets/fbce0ca0-e4a6-4f93-a102-079d05ae3c25)
+
+
 ## Características
 
 - Interfaz intuitiva y amigable
