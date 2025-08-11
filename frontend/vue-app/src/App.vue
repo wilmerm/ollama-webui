@@ -8,7 +8,24 @@
           class="message"
           :class="{ 'assistant-message': msg.role === 'assistant', 'user-message': msg.role === 'user' }"
         >
-          <div class="message-content" v-html="msg.formattedContent || msg.content"></div>
+          <div class="message-header" v-if="msg.role === 'assistant'">
+            <span class="message-role">🤖 Asistente</span>
+            <button 
+              class="copy-button" 
+              @click="copyMessage(msg.content)"
+              title="Copiar mensaje"
+            >
+              📋
+            </button>
+          </div>
+          <div class="message-header" v-else>
+            <span class="message-role">👤 Tú</span>
+          </div>
+          <div 
+            class="message-content" 
+            :class="{ 'typewriter': msg.role === 'assistant' && msg.isTyping }"
+            v-html="msg.formattedContent || msg.content"
+          ></div>
           <div v-if="index === messages.length - 1 && awaitingResponse" class="typing-indicator">
             <div class="dot"></div>
             <div class="dot"></div>
@@ -35,13 +52,43 @@
 <script>
 import { markRaw } from 'vue';
 import MarkdownIt from 'markdown-it';
+import hljs from 'highlight.js/lib/core';
+import javascript from 'highlight.js/lib/languages/javascript';
+import python from 'highlight.js/lib/languages/python';
+import html from 'highlight.js/lib/languages/xml';
+import css from 'highlight.js/lib/languages/css';
+import json from 'highlight.js/lib/languages/json';
+import markdown from 'highlight.js/lib/languages/markdown';
+
+// Register languages with highlight.js
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('html', html);
+hljs.registerLanguage('xml', html);
+hljs.registerLanguage('css', css);
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('markdown', markdown);
 
 export default {
   data() {
     return {
       prompt: '',
       messages: [],
-      md: markRaw(new MarkdownIt()),
+      md: markRaw(new MarkdownIt({
+        html: true,
+        linkify: true,
+        typographer: true,
+        highlight: function (str, lang) {
+          if (lang && hljs.getLanguage(lang)) {
+            try {
+              return '<pre class="hljs"><code class="hljs-code">' +
+                     hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+                     '</code></pre>';
+            } catch (__) {}
+          }
+          return '<pre class="hljs"><code class="hljs-code">' + this.utils.escapeHtml(str) + '</code></pre>';
+        }
+      })),
       awaitingResponse: false,
       currentStream: null,
     }
@@ -66,6 +113,7 @@ export default {
         role: 'assistant',
         content: '',
         formattedContent: '',
+        isTyping: true,
       };
       this.messages.push(aiMessage);
 
@@ -82,7 +130,8 @@ export default {
         });
 
         if (!response.ok) {
-          throw new Error(await response.text());
+          const errorText = await response.text();
+          throw new Error(`Error ${response.status}: ${errorText}`);
         }
 
         const reader = response.body
@@ -114,7 +163,7 @@ export default {
                     aiMessage.content += chunk.message.content;
                     aiMessage.formattedContent = this.md.render(aiMessage.content);
                     this.messages = [...this.messages];
-                    this.scrollToBottom();
+                    this.smoothScrollToBottom();
                   }
                 } catch (error) {
                   console.error('Error parsing JSON chunk:', line, error);
@@ -138,14 +187,66 @@ export default {
           }
         }
 
+        // Finalizar animación de escritura
+        aiMessage.isTyping = false;
+
       } catch (error) {
         console.error('Error:', error);
-        aiMessage.content = `Error: ${error.message}`;
+        aiMessage.content = `❌ **Error de conexión**\n\n${error.message}\n\n*Verifica que el servidor de Ollama esté ejecutándose en http://localhost:11434*`;
         aiMessage.formattedContent = this.md.render(aiMessage.content);
+        aiMessage.isTyping = false;
         this.messages = [...this.messages];
+        this.showErrorNotification(error.message);
       } finally {
         this.awaitingResponse = false;
+        this.smoothScrollToBottom();
       }
+    },
+
+    copyMessage(content) {
+      navigator.clipboard.writeText(content).then(() => {
+        this.showSuccessNotification('Mensaje copiado al portapapeles');
+      }).catch(err => {
+        console.error('Error al copiar:', err);
+        this.showErrorNotification('No se pudo copiar el mensaje');
+      });
+    },
+
+    showSuccessNotification(message) {
+      // Simple notification system
+      const notification = document.createElement('div');
+      notification.className = 'notification success';
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.classList.add('show');
+      }, 100);
+      
+      setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 300);
+      }, 3000);
+    },
+
+    showErrorNotification(message) {
+      const notification = document.createElement('div');
+      notification.className = 'notification error';
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.classList.add('show');
+      }, 100);
+      
+      setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 300);
+      }, 5000);
     },
 
     createLineTransformer() {
@@ -165,6 +266,18 @@ export default {
           flush(controller) {
             if (this.chunks) controller.enqueue(this.chunks);
           }
+        }
+      });
+    },
+
+    smoothScrollToBottom() {
+      this.$nextTick(() => {
+        const container = this.$refs.chatBox;
+        if (container) {
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: 'smooth'
+          });
         }
       });
     },
@@ -200,6 +313,9 @@ class LineBreakTransformer {
 </script>
 
 <style>
+/* Import highlight.js theme */
+@import 'highlight.js/styles/github-dark.css';
+
 /* Estilos generales */
 body {
   background-color: #292a2d;
@@ -247,29 +363,118 @@ body {
   scrollbar-color: #444 #333;
   border-bottom: 1px solid #444;
   box-sizing: border-box; /* Asegura que el padding no afecte el ancho */
+  scroll-behavior: smooth;
 }
 
 /* Estilos de los mensajes */
 .message {
-  margin-bottom: 0.1rem;
-  padding: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1.2rem;
   border-radius: 12px;
   word-wrap: break-word;
+  position: relative;
+}
+
+/* Header del mensaje */
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.message-role {
+  font-size: 0.9rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* Botón de copiar */
+.copy-button {
+  background: rgba(65, 102, 213, 0.2);
+  border: 1px solid rgba(65, 102, 213, 0.3);
+  color: #f5f5f5;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.copy-button:hover {
+  background: rgba(65, 102, 213, 0.3);
+  border-color: rgba(65, 102, 213, 0.5);
+  transform: translateY(-1px);
+}
+
+.copy-button:active {
+  transform: translateY(0);
 }
 
 /* Mensajes del usuario */
 .user-message {
-  background-color: #41415850;
+  background: linear-gradient(135deg, #41415850, #41415870);
   color: white;
-  align-self: flex-end;
-  display: inline-block;
+  border-left: 3px solid #4166d5;
+  margin-left: 2rem;
 }
 
 /* Mensajes del asistente */
 .assistant-message {
-  background-color: transparent;
+  background: linear-gradient(135deg, rgba(34, 139, 34, 0.1), rgba(34, 139, 34, 0.05));
   color: white;
-  align-self: flex-start;
+  border-left: 3px solid #22bb22;
+  margin-right: 2rem;
+}
+
+/* Contenido del mensaje */
+.message-content {
+  line-height: 1.6;
+}
+
+/* Animación typewriter */
+.typewriter {
+  overflow: hidden;
+  border-right: 2px solid #22bb22;
+  animation: blink-caret 1.2s step-end infinite;
+}
+
+@keyframes blink-caret {
+  from, to { border-color: transparent }
+  50% { border-color: #22bb22 }
+}
+
+/* Indicador de escritura */
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 1rem;
+  opacity: 0.7;
+}
+
+.typing-indicator .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #22bb22;
+  animation: typing-dots 1.4s infinite ease-in-out;
+}
+
+.typing-indicator .dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-indicator .dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing-dots {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
 }
 
 /* Pensamiento del asistente */
@@ -301,11 +506,11 @@ textarea {
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: #444 #555;
-
 }
 
 textarea:focus {
   outline: none;
+  box-shadow: 0 0 0 2px rgba(65, 102, 213, 0.3);
 }
 
 /* Botón de enviar */
@@ -316,55 +521,167 @@ button {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 0.3s ease;
+  transition: all 0.3s ease;
+  font-weight: 500;
 }
 
 button:hover {
   background: #2f4f9f;
+  transform: translateY(-1px);
 }
 
 button:disabled {
   background: #555;
   cursor: not-allowed;
+  transform: none;
 }
 
-/* Estilos para markdown (opcional) */
-.markdown-content {
-  margin-top: 0.5rem;
+/* Estilos mejorados para markdown */
+.message-content h1, .message-content h2, .message-content h3,
+.message-content h4, .message-content h5, .message-content h6 {
+  margin: 1.5rem 0 1rem 0;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: 0.5rem;
 }
 
-.markdown-content h1, .markdown-content h2, .markdown-content h3 {
+.message-content h1 { font-size: 1.8rem; }
+.message-content h2 { font-size: 1.5rem; }
+.message-content h3 { font-size: 1.3rem; }
+
+.message-content p {
+  margin: 0.8rem 0;
+  line-height: 1.7;
+}
+
+.message-content ul, .message-content ol {
   margin: 1rem 0;
+  padding-left: 2rem;
 }
 
-.markdown-content p {
+.message-content li {
   margin: 0.5rem 0;
 }
 
-.markdown-content ul, .markdown-content ol {
-  margin: 0.5rem 0;
-  padding-left: 1.5rem;
+.message-content a {
+  color: #4166d5;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
 }
 
-.markdown-content code {
-  background: #f0f0f0;
-  padding: 0.2rem 0.4rem;
+.message-content a:hover {
+  border-bottom-color: #4166d5;
+  color: #5577dd;
+}
+
+/* Estilos mejorados para código */
+.message-content code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.2rem 0.5rem;
   border-radius: 4px;
-  font-family: monospace;
+  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: 0.9rem;
+  color: #ff6b6b;
 }
 
-.markdown-content pre {
-  background: #f5f5f5;
-  padding: 1rem;
-  border-radius: 6px;
+.message-content pre {
+  background: #1e1e1e !important;
+  padding: 1.5rem !important;
+  border-radius: 8px;
   overflow-x: auto;
-  margin: 1rem 0;
+  margin: 1.5rem 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
 }
 
-.markdown-content pre code {
-  background: none;
-  padding: 0;
+.message-content pre code {
+  background: none !important;
+  padding: 0 !important;
+  color: #f8f8f2 !important;
+  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
-/* Aplicar estilo al contenido */
+/* Estilo para tablas */
+.message-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5rem 0;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.message-content th, .message-content td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.8rem 1rem;
+  text-align: left;
+}
+
+.message-content th {
+  background: rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+  color: #fff;
+}
+
+.message-content tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Blockquotes */
+.message-content blockquote {
+  border-left: 4px solid #4166d5;
+  margin: 1.5rem 0;
+  padding: 1rem 1.5rem;
+  background: rgba(65, 102, 213, 0.1);
+  border-radius: 0 6px 6px 0;
+  font-style: italic;
+}
+
+/* Notificaciones */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 1rem 1.5rem;
+  border-radius: 6px;
+  color: white;
+  font-weight: 500;
+  z-index: 1000;
+  transform: translateX(100%);
+  transition: all 0.3s ease;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.notification.success {
+  background: linear-gradient(135deg, #22bb22, #28a745);
+}
+
+.notification.error {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+}
+
+.notification.show {
+  transform: translateX(0);
+}
+
+/* Responsividad */
+@media (max-width: 768px) {
+  .container {
+    padding: 0.5rem;
+  }
+  
+  .message {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 1rem;
+  }
+  
+  .chat-box {
+    padding: 1rem;
+  }
+}
 </style>
