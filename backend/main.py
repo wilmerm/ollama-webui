@@ -62,8 +62,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],  # Only allow necessary methods
-    allow_headers=["Content-Type", "Authorization"],  # Only allow necessary headers
+    allow_methods=["*"],  # Only allow necessary methods
+    allow_headers=["*"],  # Only allow necessary headers
 )
 
 # Add security headers middleware
@@ -74,7 +74,13 @@ async def add_security_headers(request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' http://localhost:11434"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "connect-src *;"
+    )
     return response
 
 

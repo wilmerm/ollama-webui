@@ -205,7 +205,7 @@ export default {
           errorMessage = 'Error procesando la solicitud. Inténtalo de nuevo.';
         }
 
-        aiMessage.content = `❌ **${errorMessage}**\n\n*Verifica que el servidor de Ollama esté ejecutándose en http://localhost:7000*`;
+        aiMessage.content = `❌ **${errorMessage}**\n\n*Verifica que el servidor de Ollama esté ejecutándose en http://localhost:7000*\n\n${error.message || ''}`;
         aiMessage.formattedContent = this.md.render(aiMessage.content);
         aiMessage.isTyping = false;
         this.messages = [...this.messages];
