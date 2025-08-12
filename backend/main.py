@@ -6,8 +6,11 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from pydantic_settings import BaseSettings
+from pydantic import BaseModel, Field, validator
+from typing import List, Dict, Any, Optional
 import httpx
 from dotenv import load_dotenv
 
@@ -16,20 +19,61 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 
+class Message(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant|system)$")
+    content: str = Field(..., min_length=1, max_length=10000)
+
+class ChatRequest(BaseModel):
+    messages: List[Message] = Field(..., min_length=1, max_length=50)
+    model: Optional[str] = Field(None, max_length=100)
+    temperature: Optional[float] = Field(0.5, ge=0.0, le=2.0)
+    stream: Optional[bool] = False
+
+    @validator('messages')
+    def validate_messages(cls, v):
+        if not v:
+            raise ValueError("Messages cannot be empty")
+        return v
+
+logging.basicConfig(level=logging.INFO)
+
 class Settings(BaseSettings):
     debug: bool = False
-    allowed_hosts: str = "*"
+    allowed_hosts: str = "localhost,127.0.0.1"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
 settings = Settings()
 app = FastAPI(debug=settings.debug)
 
-# Configurar CORS para permitir Vue
+# Parse allowed hosts and CORS origins
+allowed_hosts_list = [host.strip() for host in settings.allowed_hosts.split(",")]
+cors_origins_list = [origin.strip() for origin in settings.cors_origins.split(",")]
+
+# Add trusted host middleware for security
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=allowed_hosts_list
+)
+
+# Configure CORS with specific origins (not wildcard)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Para desarrollo local
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],  # Only allow necessary methods
+    allow_headers=["Content-Type", "Authorization"],  # Only allow necessary headers
 )
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' http://localhost:11434"
+    return response
 
 
 async def generate_ollama_stream(ollama_url: str, json: dict):
@@ -49,7 +93,7 @@ async def generate_ollama_stream(ollama_url: str, json: dict):
 
 
 @app.post("/api/ollama")
-async def ask_ollama(payload: dict):
+async def ask_ollama(request: ChatRequest):
 
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     ollama_url = f"{ollama_base_url}/api/chat"
@@ -59,15 +103,15 @@ async def ask_ollama(payload: dict):
     default_timeout = float(os.getenv("DEFAULT_TIMEOUT", 60))
 
     default_model = os.getenv("DEFAULT_MODEL", "deepseek-r1:1.5b")
-    model = payload.get("model", default_model)
+    model = request.model or default_model
 
     default_temperature = float(os.getenv("DEFAULT_TEMPERATURE", 0.5))
-    temperature = payload.get("temperature", default_temperature)
+    temperature = request.temperature or default_temperature
 
-    messages = payload.get("messages", [])
-    stream = payload.get("stream", False)
+    messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+    stream = request.stream
 
-    logging.info(f"{model=}, {default_timeout=}, {stream=} {ollama_url=}")
+    logging.info(f"Request: model={model}, timeout={default_timeout}, stream={stream}")
 
     try:
         if stream:
@@ -101,15 +145,23 @@ async def ask_ollama(payload: dict):
                 )
                 response_data = response.json()
                 if response_data.get("error"):
-                    raise HTTPException(status_code=400, detail=response_data["error"])
+                    logging.error(f"Ollama API error: {response_data['error']}")
+                    raise HTTPException(status_code=400, detail="AI service error occurred")
                 return {"response": response_data["message"]["content"]}
 
     except HTTPException as he:
         raise he
+    except httpx.TimeoutException:
+        logging.error("Request timeout to Ollama service")
+        raise HTTPException(status_code=504, detail="AI service timeout")
+    except httpx.ConnectError:
+        logging.error("Cannot connect to Ollama service")
+        raise HTTPException(status_code=503, detail="AI service unavailable")
     except Exception as e:
-        logging.error(f"Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Unexpected error: {type(e).__name__}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 dist_path = Path(__file__).parent.parent / "frontend" / "vue-app" / "dist"
-app.mount("/", StaticFiles(directory=dist_path, html=True), name="static")
+if dist_path.exists():
+    app.mount("/", StaticFiles(directory=dist_path, html=True), name="static")
