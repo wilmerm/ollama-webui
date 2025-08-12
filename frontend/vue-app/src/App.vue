@@ -95,6 +95,7 @@ export default {
   },
 
   async mounted() {
+    this.VITE_OLLAMA_SERVER_BASE_URL = import.meta.env.VITE_OLLAMA_SERVER_BASE_URL || 'http://localhost:7000';
     this.scrollToBottom();
   },
 
@@ -122,7 +123,7 @@ export default {
       this.messages.push(aiMessage);
 
       try {
-        const response = await fetch(`http://localhost:7000/api/ollama`, {
+        const response = await fetch(`${this.VITE_OLLAMA_SERVER_BASE_URL}/api/ollama`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -205,7 +206,7 @@ export default {
           errorMessage = 'Error procesando la solicitud. Inténtalo de nuevo.';
         }
 
-        aiMessage.content = `❌ **${errorMessage}**\n\n*Verifica que el servidor de Ollama esté ejecutándose en http://localhost:7000*\n\n${error.message || ''}`;
+        aiMessage.content = `❌ **${errorMessage}**\n\n*Verifica que el servidor de Ollama esté ejecutándose en ${this.VITE_OLLAMA_SERVER_BASE_URL}*\n\n${error.message || ''}`;
         aiMessage.formattedContent = this.md.render(aiMessage.content);
         aiMessage.isTyping = false;
         this.messages = [...this.messages];

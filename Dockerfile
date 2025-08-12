@@ -5,6 +5,10 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 COPY frontend/vue-app/package*.json ./
+
+ARG VITE_OLLAMA_SERVER_BASE_URL
+RUN echo "VITE_OLLAMA_SERVER_BASE_URL=${VITE_OLLAMA_SERVER_BASE_URL}" > .env
+
 RUN npm ci
 COPY frontend/vue-app/ ./
 RUN npm run build
