@@ -9,6 +9,7 @@ __pycache__/
 dist/
 build/
 *.so
+.pyenv
 
 # FastAPI
 .env
