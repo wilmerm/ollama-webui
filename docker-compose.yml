@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ollama-webui-backend
+    restart: unless-stopped
+    environment:
+      # Load environment variables from .env file
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-llama3.2:3b}
+      - DEFAULT_TEMPERATURE=${DEFAULT_TEMPERATURE:-0.5}
+      - DEFAULT_TIMEOUT=${DEFAULT_TIMEOUT:-60}
+      - DEBUG=${DEBUG:-False}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,frontend}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - GUNICORN_PORT=${GUNICORN_PORT:-8000}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-4}
+    ports:
+      - "8000:8000"
+    networks:
+      - ollama-network
+    volumes:
+      # For development: mount source code
+      - ./backend:/app/backend:ro
+      # For logs (optional)
+      - ollama-logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/ollama || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend/vue-app
+      dockerfile: Dockerfile
+    container_name: ollama-webui-frontend
+    restart: unless-stopped
+    environment:
+      - VITE_OLLAMA_SERVER_BASE_URL=${VITE_OLLAMA_SERVER_BASE_URL:-http://localhost:8000}
+    ports:
+      - "3000:80"
+    networks:
+      - ollama-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      # For development: mount source code (uncomment for development)
+      # - ./frontend/vue-app/src:/app/src:ro
+      # - ./frontend/vue-app/public:/app/public:ro
+      - ollama-logs:/tmp
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  ollama-network:
+    driver: bridge
+    name: ollama-network
+
+volumes:
+  ollama-logs:
+    driver: local
