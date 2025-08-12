@@ -29,7 +29,7 @@ GUNICORN_PORT=8000
 GUNICORN_WORKERS=1
 
 # Frontend Configuration
-VITE_OLLAMA_SERVER_BASE_URL=http://localhost
+VITE_SERVER_BASE_URL=http://localhost
 ```
 
 ### Security Best Practices

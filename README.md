@@ -60,10 +60,10 @@ DEFAULT_TEMPERATURE=0.5
 GUNICORN_PORT=8000
 GUNICORN_WORKERS=1
 
-VITE_OLLAMA_SERVER_BASE_URL=http://localhost
+VITE_SERVER_BASE_URL=http://localhost
 ```
 
-**⚠️ Seguridad**: 
+**⚠️ Seguridad**:
 - **Nunca** uses `*` en `ALLOWED_HOSTS` o `CORS_ORIGINS` en producción
 - **Nunca** commitees el archivo `.env` al repositorio
 - Lee las [Pautas de Seguridad](SECURITY.md) antes del despliegue
