@@ -95,7 +95,7 @@ export default {
   },
 
   async mounted() {
-    this.VITE_SERVER_BASE_URL = import.meta.env.VITE_SERVER_BASE_URL || 'http://localhost:7000';
+    this.VITE_SERVER_BASE_URL = import.meta.env.VITE_SERVER_BASE_URL || '';
     this.scrollToBottom();
   },
 
