@@ -10,8 +10,8 @@
         >
           <div class="message-header" v-if="msg.role === 'assistant'">
             <span class="message-role">🤖 Asistente</span>
-            <button 
-              class="copy-button" 
+            <button
+              class="copy-button"
               @click="copyMessage(msg.content)"
               title="Copiar mensaje"
             >
@@ -21,8 +21,8 @@
           <div class="message-header" v-else>
             <span class="message-role">👤 Tú</span>
           </div>
-          <div 
-            class="message-content" 
+          <div
+            class="message-content"
             :class="{ 'typewriter': msg.role === 'assistant' && msg.isTyping }"
             v-html="msg.formattedContent || msg.content"
           ></div>
@@ -94,6 +94,13 @@ export default {
     }
   },
 
+  async mounted() {
+    // Configurar el servidor base de Ollama
+    console.log(import.meta.env); // Verifica qué variables están disponibles
+    this.OLLAMA_SERVER_BASE_URL = import.meta.env.VITE_OLLAMA_SERVER_BASE_URL || 'http://localhost';
+    this.scrollToBottom();
+  },
+
   methods: {
     async sendPrompt() {
       if (!this.prompt.trim() || this.awaitingResponse) return;
@@ -118,7 +125,7 @@ export default {
       this.messages.push(aiMessage);
 
       try {
-        const response = await fetch('http://localhost:8000/api/ollama', {
+        const response = await fetch(`${this.OLLAMA_SERVER_BASE_URL}:8000/api/ollama`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -192,7 +199,7 @@ export default {
 
       } catch (error) {
         console.error('Error:', error);
-        aiMessage.content = `❌ **Error de conexión**\n\n${error.message}\n\n*Verifica que el servidor de Ollama esté ejecutándose en http://localhost:11434*`;
+        aiMessage.content = `❌ **Error de conexión**\n\n${error.message}\n\n*Verifica que el servidor de Ollama esté ejecutándose en ${this.OLLAMA_SERVER_BASE_URL}:11434*`;
         aiMessage.formattedContent = this.md.render(aiMessage.content);
         aiMessage.isTyping = false;
         this.messages = [...this.messages];
@@ -218,11 +225,11 @@ export default {
       notification.className = 'notification success';
       notification.textContent = message;
       document.body.appendChild(notification);
-      
+
       setTimeout(() => {
         notification.classList.add('show');
       }, 100);
-      
+
       setTimeout(() => {
         notification.classList.remove('show');
         setTimeout(() => {
@@ -236,11 +243,11 @@ export default {
       notification.className = 'notification error';
       notification.textContent = message;
       document.body.appendChild(notification);
-      
+
       setTimeout(() => {
         notification.classList.add('show');
       }, 100);
-      
+
       setTimeout(() => {
         notification.classList.remove('show');
         setTimeout(() => {
@@ -673,13 +680,13 @@ button:disabled {
   .container {
     padding: 0.5rem;
   }
-  
+
   .message {
     margin-left: 0 !important;
     margin-right: 0 !important;
     padding: 1rem;
   }
-  
+
   .chat-box {
     padding: 1rem;
   }
