@@ -33,25 +33,40 @@ Ollama WebUI es una interfaz gráfica web minimalista y fácil de usar, desarrol
 
 ## Configuración (.env)
 
+**⚠️ Importante**: Copia el archivo `.env.example` a `.env` y modifica los valores según tu entorno.
+
+```bash
+cp .env.example .env
+```
+
 Configura las siguientes variables en tu archivo `.env`:
 
 ```ini
 OLLAMA_BASE_URL=http://localhost:11434
 DEFAULT_MODEL=llama3.2:3b
+
+# Configuración de seguridad (IMPORTANTE para producción)
+DEBUG=False
+ALLOWED_HOSTS=localhost,127.0.0.1
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
 Variables opcionales:
 
 ```ini
-DEBUG=True
-ALLOWED_HOSTS=*
-
 DEFAULT_TIMEOUT=30
 DEFAULT_TEMPERATURE=0.5
 
 GUNICORN_PORT=8000
 GUNICORN_WORKERS=1
+
+VITE_OLLAMA_SERVER_BASE_URL=http://localhost
 ```
+
+**⚠️ Seguridad**: 
+- **Nunca** uses `*` en `ALLOWED_HOSTS` o `CORS_ORIGINS` en producción
+- **Nunca** commitees el archivo `.env` al repositorio
+- Lee las [Pautas de Seguridad](SECURITY.md) antes del despliegue
 
 ## Uso
 

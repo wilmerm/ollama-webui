@@ -95,8 +95,7 @@ export default {
   },
 
   async mounted() {
-    // Configurar el servidor base de Ollama
-    console.log(import.meta.env); // Verifica qué variables están disponibles
+    // Configurar el servidor base de Ollama desde variables de entorno
     this.OLLAMA_SERVER_BASE_URL = import.meta.env.VITE_OLLAMA_SERVER_BASE_URL || 'http://localhost';
     this.scrollToBottom();
   },
@@ -199,11 +198,20 @@ export default {
 
       } catch (error) {
         console.error('Error:', error);
-        aiMessage.content = `❌ **Error de conexión**\n\n${error.message}\n\n*Verifica que el servidor de Ollama esté ejecutándose en ${this.OLLAMA_SERVER_BASE_URL}:11434*`;
+        let errorMessage = 'Error de conexión con el servidor';
+        
+        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+          errorMessage = 'No se puede conectar con el servidor. Verifica que esté ejecutándose.';
+        } else if (error.message) {
+          // Don't expose detailed error messages from server
+          errorMessage = 'Error procesando la solicitud. Inténtalo de nuevo.';
+        }
+        
+        aiMessage.content = `❌ **${errorMessage}**\n\n*Verifica que el servidor de Ollama esté ejecutándose en ${this.OLLAMA_SERVER_BASE_URL}:11434*`;
         aiMessage.formattedContent = this.md.render(aiMessage.content);
         aiMessage.isTyping = false;
         this.messages = [...this.messages];
-        this.showErrorNotification(error.message);
+        this.showErrorNotification(errorMessage);
       } finally {
         this.awaitingResponse = false;
         this.smoothScrollToBottom();
