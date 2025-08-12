@@ -39,8 +39,10 @@ logging.basicConfig(level=logging.INFO)
 
 class Settings(BaseSettings):
     debug: bool = False
-    allowed_hosts: str = "localhost,127.0.0.1"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # allwed all hosts
+    allowed_hosts: str = "*"
+    # allowed all origins for CORS
+    cors_origins: str = "*"
 
 settings = Settings()
 app = FastAPI(debug=settings.debug)
