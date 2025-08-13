@@ -232,7 +232,8 @@ export default {
                   const chunk = JSON.parse(line);
                   if (chunk.message?.content) {
                     aiMessage.content += chunk.message.content;
-                    aiMessage.formattedContent = this.md.render(aiMessage.content);
+                    const preprocessedContent = this.preprocessThinkingTags(aiMessage.content);
+                    aiMessage.formattedContent = this.md.render(preprocessedContent);
                     this.messages = [...this.messages];
                     this.smoothScrollToBottom();
                   }
@@ -250,7 +251,8 @@ export default {
             const chunk = JSON.parse(buffer.trim());
             if (chunk.message?.content) {
               aiMessage.content += chunk.message.content;
-              aiMessage.formattedContent = this.md.render(aiMessage.content);
+              const preprocessedContent = this.preprocessThinkingTags(aiMessage.content);
+              aiMessage.formattedContent = this.md.render(preprocessedContent);
               this.messages = [...this.messages];
             }
           } catch (error) {
@@ -273,7 +275,8 @@ export default {
         }
 
         aiMessage.content = `❌ **${errorMessage}**\n\n*Verifica que el servidor de Ollama esté ejecutándose en ${this.VITE_SERVER_BASE_URL}*\n\n${error.message || ''}`;
-        aiMessage.formattedContent = this.md.render(aiMessage.content);
+        const preprocessedErrorContent = this.preprocessThinkingTags(aiMessage.content);
+        aiMessage.formattedContent = this.md.render(preprocessedErrorContent);
         aiMessage.isTyping = false;
         this.messages = [...this.messages];
         this.showErrorNotification(errorMessage);
@@ -281,6 +284,34 @@ export default {
         this.awaitingResponse = false;
         this.smoothScrollToBottom();
       }
+    },
+
+    /**
+     * Preprocesses AI message content to style thinking tags
+     * @param {string} content - Raw AI message content
+     * @returns {string} - Preprocessed content with styled thinking sections
+     */
+    preprocessThinkingTags(content) {
+      if (!content || typeof content !== 'string') {
+        return content;
+      }
+
+      // Process <think> and <thinking> tags (both opening and closing)
+      let processedContent = content;
+      
+      // Replace <think> tags with styled divs
+      processedContent = processedContent.replace(
+        /<think>([\s\S]*?)<\/think>/gi,
+        '<div class="ai-thinking"><span class="ai-thinking-prefix">[AI Thinking]:</span> $1</div>'
+      );
+      
+      // Replace <thinking> tags with styled divs
+      processedContent = processedContent.replace(
+        /<thinking>([\s\S]*?)<\/thinking>/gi,
+        '<div class="ai-thinking"><span class="ai-thinking-prefix">[AI Thinking]:</span> $1</div>'
+      );
+
+      return processedContent;
     },
 
     copyMessage(content) {
@@ -925,6 +956,26 @@ button:disabled {
   background: rgba(65, 102, 213, 0.1);
   border-radius: 0 6px 6px 0;
   font-style: italic;
+}
+
+/* AI Thinking Tags Styling */
+.message-content .ai-thinking {
+  color: #888;
+  font-size: 0.9em;
+  margin: 1rem 0;
+  padding: 0.8rem 1.2rem;
+  background: rgba(136, 136, 136, 0.1);
+  border-left: 3px solid #666;
+  border-radius: 0 4px 4px 0;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.message-content .ai-thinking-prefix {
+  font-weight: 600;
+  color: #999;
+  font-style: normal;
+  margin-right: 0.5rem;
 }
 
 /* Notificaciones */
