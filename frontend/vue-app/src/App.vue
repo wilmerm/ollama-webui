@@ -91,6 +91,7 @@ import html from 'highlight.js/lib/languages/xml';
 import css from 'highlight.js/lib/languages/css';
 import json from 'highlight.js/lib/languages/json';
 import markdown from 'highlight.js/lib/languages/markdown';
+import systemPromptCrypto from './utils/crypto.js';
 
 // Register languages with highlight.js
 hljs.registerLanguage('javascript', javascript);
@@ -125,12 +126,27 @@ export default {
       })),
       awaitingResponse: false,
       currentStream: null,
+      saveTimeout: null, // For debounced saving
     }
   },
 
   async mounted() {
     this.VITE_SERVER_BASE_URL = import.meta.env.VITE_SERVER_BASE_URL || '';
     this.scrollToBottom();
+    await this.loadSystemPrompt();
+  },
+
+  watch: {
+    systemPrompt(newValue) {
+      // Debounced save to avoid too frequent localStorage writes
+      this.debounceSaveSystemPrompt();
+    }
+  },
+
+  beforeUnmount() {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
   },
 
   methods: {
@@ -280,10 +296,54 @@ export default {
 
     clearSystemPrompt() {
       this.systemPrompt = '';
+      this.saveSystemPrompt(); // Immediately save the cleared state
     },
 
     usePresetPrompt() {
       this.systemPrompt = 'Eres un asistente útil que responde de manera concisa y clara. Siempre mantén un tono profesional y amigable.';
+    },
+
+    /**
+     * Loads encrypted system prompt from localStorage
+     */
+    async loadSystemPrompt() {
+      try {
+        if (systemPromptCrypto.constructor.isSupported()) {
+          const savedPrompt = await systemPromptCrypto.loadSystemPrompt();
+          if (savedPrompt) {
+            this.systemPrompt = savedPrompt;
+          }
+        } else {
+          console.warn('Web Crypto API not supported, system prompts will not be persisted securely');
+        }
+      } catch (error) {
+        console.warn('Failed to load system prompt:', error);
+      }
+    },
+
+    /**
+     * Saves encrypted system prompt to localStorage
+     */
+    async saveSystemPrompt() {
+      try {
+        if (systemPromptCrypto.constructor.isSupported()) {
+          await systemPromptCrypto.saveSystemPrompt(this.systemPrompt);
+        }
+      } catch (error) {
+        console.warn('Failed to save system prompt:', error);
+      }
+    },
+
+    /**
+     * Debounced save to avoid too frequent localStorage writes
+     */
+    debounceSaveSystemPrompt() {
+      if (this.saveTimeout) {
+        clearTimeout(this.saveTimeout);
+      }
+      this.saveTimeout = setTimeout(() => {
+        this.saveSystemPrompt();
+      }, 1000); // Save 1 second after user stops typing
     },
 
     showSuccessNotification(message) {
