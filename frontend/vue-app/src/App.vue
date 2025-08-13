@@ -9,7 +9,7 @@
           :class="{ 'assistant-message': msg.role === 'assistant', 'user-message': msg.role === 'user' }"
         >
           <div class="message-header" v-if="msg.role === 'assistant'">
-            <span class="message-role">🤖 Asistente</span>
+            <span class="message-role">😊</span>
             <button
               class="copy-button"
               @click="copyMessage(msg.content)"
@@ -17,9 +17,6 @@
             >
               📋
             </button>
-          </div>
-          <div class="message-header" v-else>
-            <span class="message-role">👤 Tú</span>
           </div>
           <div
             class="message-content"
@@ -302,13 +299,13 @@ export default {
       // Replace <think> tags with styled divs
       processedContent = processedContent.replace(
         /<think>([\s\S]*?)<\/think>/gi,
-        '<div class="ai-thinking"><span class="ai-thinking-prefix">[AI Thinking]:</span> $1</div>'
+        '<div class="ai-thinking"><span class="ai-thinking-prefix">💭:</span> $1</div>'
       );
 
       // Replace <thinking> tags with styled divs
       processedContent = processedContent.replace(
         /<thinking>([\s\S]*?)<\/thinking>/gi,
-        '<div class="ai-thinking"><span class="ai-thinking-prefix">[AI Thinking]:</span> $1</div>'
+        '<div class="ai-thinking"><span class="ai-thinking-prefix">💭:</span> $1</div>'
       );
 
       return processedContent;
@@ -795,15 +792,6 @@ body {
   }
 }
 
-/* Pensamiento del asistente */
-.message-think {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-size: smaller;
-}
-
 /* Grupo de entrada de texto */
 .input-group {
   display: flex;
@@ -961,17 +949,16 @@ button:disabled {
 /* AI Thinking Tags Styling */
 .message-content .ai-thinking,
 .message-content thinking,
-.message-content think {
+think {
   color: #888;
   font-size: 0.9em;
-  line-height: 0.8;
+  line-height: 0.75;
   margin: 1rem 0;
   padding: 0.8rem 1.2rem;
   background: rgba(136, 136, 136, 0.1);
   border-left: 3px solid #666;
   border-radius: 0 4px 4px 0;
   font-style: italic;
-  line-height: 1.5;
 }
 
 .message-content .ai-thinking-prefix {
