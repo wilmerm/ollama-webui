@@ -401,6 +401,8 @@ export default {
           console.debug('Saving system prompt:', this.systemPrompt ? 'content present' : 'empty');
           await systemPromptCrypto.saveSystemPrompt(this.systemPrompt);
           console.debug('System prompt saved successfully');
+        } else {
+          console.warn('Web Crypto API not supported, system prompts will not be persisted securely');
         }
       } catch (error) {
         console.warn('Failed to save system prompt:', error);
