@@ -48,15 +48,15 @@
             :disabled="awaitingResponse"
           ></textarea>
           <div class="system-prompt-actions">
-            <button 
-              @click="clearSystemPrompt" 
+            <button
+              @click="clearSystemPrompt"
               class="clear-button"
               :disabled="!systemPrompt.trim() || awaitingResponse"
             >
               🗑️ Limpiar
             </button>
-            <button 
-              @click="usePresetPrompt" 
+            <button
+              @click="usePresetPrompt"
               class="preset-button"
               :disabled="awaitingResponse"
             >
@@ -176,7 +176,7 @@ export default {
 
       // Prepare messages for API call
       const messagesToSend = [];
-      
+
       // Add system message if present
       if (this.systemPrompt.trim()) {
         messagesToSend.push({
@@ -184,7 +184,7 @@ export default {
           content: this.systemPrompt.trim()
         });
       }
-      
+
       // Add conversation history (excluding the empty assistant message we just added)
       messagesToSend.push(...this.messages
         .slice(0, -1)
@@ -298,13 +298,13 @@ export default {
 
       // Process <think> and <thinking> tags (both opening and closing)
       let processedContent = content;
-      
+
       // Replace <think> tags with styled divs
       processedContent = processedContent.replace(
         /<think>([\s\S]*?)<\/think>/gi,
         '<div class="ai-thinking"><span class="ai-thinking-prefix">[AI Thinking]:</span> $1</div>'
       );
-      
+
       // Replace <thinking> tags with styled divs
       processedContent = processedContent.replace(
         /<thinking>([\s\S]*?)<\/thinking>/gi,
@@ -338,15 +338,15 @@ export default {
         textArea.style.position = 'fixed';
         textArea.style.left = '-9999px';
         textArea.style.opacity = '0';
-        
+
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        
+
         // Try to copy using the deprecated but widely supported execCommand
         const successful = document.execCommand('copy');
         document.body.removeChild(textArea);
-        
+
         if (successful) {
           this.showSuccessNotification('Mensaje copiado al portapapeles');
         } else {
@@ -959,9 +959,12 @@ button:disabled {
 }
 
 /* AI Thinking Tags Styling */
-.message-content .ai-thinking {
+.message-content .ai-thinking,
+.message-content thinking,
+.message-content think {
   color: #888;
   font-size: 0.9em;
+  line-height: 0.8;
   margin: 1rem 0;
   padding: 0.8rem 1.2rem;
   background: rgba(136, 136, 136, 0.1);
