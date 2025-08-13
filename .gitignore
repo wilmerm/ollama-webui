@@ -37,3 +37,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Test files
+test-*.js
+*-test.js
