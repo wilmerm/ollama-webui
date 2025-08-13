@@ -9,7 +9,7 @@
           :class="{ 'assistant-message': msg.role === 'assistant', 'user-message': msg.role === 'user' }"
         >
           <div class="message-header" v-if="msg.role === 'assistant'">
-            <span class="message-role">🤖 Asistente</span>
+            <span class="message-role">😊</span>
             <button
               class="copy-button"
               @click="copyMessage(msg.content)"
@@ -17,9 +17,6 @@
             >
               📋
             </button>
-          </div>
-          <div class="message-header" v-else>
-            <span class="message-role">👤 Tú</span>
           </div>
           <div
             class="message-content"
@@ -48,15 +45,15 @@
             :disabled="awaitingResponse"
           ></textarea>
           <div class="system-prompt-actions">
-            <button 
-              @click="clearSystemPrompt" 
+            <button
+              @click="clearSystemPrompt"
               class="clear-button"
               :disabled="!systemPrompt.trim() || awaitingResponse"
             >
               🗑️ Limpiar
             </button>
-            <button 
-              @click="usePresetPrompt" 
+            <button
+              @click="usePresetPrompt"
               class="preset-button"
               :disabled="awaitingResponse"
             >
@@ -176,7 +173,7 @@ export default {
 
       // Prepare messages for API call
       const messagesToSend = [];
-      
+
       // Add system message if present
       if (this.systemPrompt.trim()) {
         messagesToSend.push({
@@ -184,7 +181,7 @@ export default {
           content: this.systemPrompt.trim()
         });
       }
-      
+
       // Add conversation history (excluding the empty assistant message we just added)
       messagesToSend.push(...this.messages
         .slice(0, -1)
@@ -232,7 +229,8 @@ export default {
                   const chunk = JSON.parse(line);
                   if (chunk.message?.content) {
                     aiMessage.content += chunk.message.content;
-                    aiMessage.formattedContent = this.md.render(aiMessage.content);
+                    const preprocessedContent = this.preprocessThinkingTags(aiMessage.content);
+                    aiMessage.formattedContent = this.md.render(preprocessedContent);
                     this.messages = [...this.messages];
                     this.smoothScrollToBottom();
                   }
@@ -250,7 +248,8 @@ export default {
             const chunk = JSON.parse(buffer.trim());
             if (chunk.message?.content) {
               aiMessage.content += chunk.message.content;
-              aiMessage.formattedContent = this.md.render(aiMessage.content);
+              const preprocessedContent = this.preprocessThinkingTags(aiMessage.content);
+              aiMessage.formattedContent = this.md.render(preprocessedContent);
               this.messages = [...this.messages];
             }
           } catch (error) {
@@ -273,7 +272,8 @@ export default {
         }
 
         aiMessage.content = `❌ **${errorMessage}**\n\n*Verifica que el servidor de Ollama esté ejecutándose en ${this.VITE_SERVER_BASE_URL}*\n\n${error.message || ''}`;
-        aiMessage.formattedContent = this.md.render(aiMessage.content);
+        const preprocessedErrorContent = this.preprocessThinkingTags(aiMessage.content);
+        aiMessage.formattedContent = this.md.render(preprocessedErrorContent);
         aiMessage.isTyping = false;
         this.messages = [...this.messages];
         this.showErrorNotification(errorMessage);
@@ -281,6 +281,34 @@ export default {
         this.awaitingResponse = false;
         this.smoothScrollToBottom();
       }
+    },
+
+    /**
+     * Preprocesses AI message content to style thinking tags
+     * @param {string} content - Raw AI message content
+     * @returns {string} - Preprocessed content with styled thinking sections
+     */
+    preprocessThinkingTags(content) {
+      if (!content || typeof content !== 'string') {
+        return content;
+      }
+
+      // Process <think> and <thinking> tags (both opening and closing)
+      let processedContent = content;
+
+      // Replace <think> tags with styled divs
+      processedContent = processedContent.replace(
+        /<think>([\s\S]*?)<\/think>/gi,
+        '<div class="ai-thinking"><span class="ai-thinking-prefix">💭:</span> $1</div>'
+      );
+
+      // Replace <thinking> tags with styled divs
+      processedContent = processedContent.replace(
+        /<thinking>([\s\S]*?)<\/thinking>/gi,
+        '<div class="ai-thinking"><span class="ai-thinking-prefix">💭:</span> $1</div>'
+      );
+
+      return processedContent;
     },
 
     copyMessage(content) {
@@ -307,15 +335,15 @@ export default {
         textArea.style.position = 'fixed';
         textArea.style.left = '-9999px';
         textArea.style.opacity = '0';
-        
+
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        
+
         // Try to copy using the deprecated but widely supported execCommand
         const successful = document.execCommand('copy');
         document.body.removeChild(textArea);
-        
+
         if (successful) {
           this.showSuccessNotification('Mensaje copiado al portapapeles');
         } else {
@@ -373,6 +401,8 @@ export default {
           console.debug('Saving system prompt:', this.systemPrompt ? 'content present' : 'empty');
           await systemPromptCrypto.saveSystemPrompt(this.systemPrompt);
           console.debug('System prompt saved successfully');
+        } else {
+          console.warn('Web Crypto API not supported, system prompts will not be persisted securely');
         }
       } catch (error) {
         console.warn('Failed to save system prompt:', error);
@@ -764,15 +794,6 @@ body {
   }
 }
 
-/* Pensamiento del asistente */
-.message-think {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-size: smaller;
-}
-
 /* Grupo de entrada de texto */
 .input-group {
   display: flex;
@@ -925,6 +946,28 @@ button:disabled {
   background: rgba(65, 102, 213, 0.1);
   border-radius: 0 6px 6px 0;
   font-style: italic;
+}
+
+/* AI Thinking Tags Styling */
+.message-content .ai-thinking,
+.message-content thinking,
+think {
+  color: #888;
+  font-size: 0.9em;
+  line-height: 0.75;
+  margin: 1rem 0;
+  padding: 0.8rem 1.2rem;
+  background: rgba(136, 136, 136, 0.1);
+  border-left: 3px solid #666;
+  border-radius: 0 4px 4px 0;
+  font-style: italic;
+}
+
+.message-content .ai-thinking-prefix {
+  font-weight: 600;
+  color: #999;
+  font-style: normal;
+  margin-right: 0.5rem;
 }
 
 /* Notificaciones */
