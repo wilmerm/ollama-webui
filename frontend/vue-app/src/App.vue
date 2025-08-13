@@ -34,6 +34,38 @@
         </div>
       </div>
 
+      <!-- System Prompt Section -->
+      <div class="system-prompt-section">
+        <div class="system-prompt-header" @click="toggleSystemPrompt">
+          <span class="system-prompt-title">⚙️ Instrucciones del Sistema</span>
+          <span class="toggle-icon" :class="{ 'expanded': showSystemPrompt }">▼</span>
+        </div>
+        <div class="system-prompt-container" v-show="showSystemPrompt">
+          <textarea
+            v-model="systemPrompt"
+            placeholder="Eres un asistente útil. Define aquí el comportamiento del modelo..."
+            class="system-prompt-input"
+            :disabled="awaitingResponse"
+          ></textarea>
+          <div class="system-prompt-actions">
+            <button 
+              @click="clearSystemPrompt" 
+              class="clear-button"
+              :disabled="!systemPrompt.trim() || awaitingResponse"
+            >
+              🗑️ Limpiar
+            </button>
+            <button 
+              @click="usePresetPrompt" 
+              class="preset-button"
+              :disabled="awaitingResponse"
+            >
+              📋 Usar Ejemplo
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="input-group">
         <textarea
           v-model="prompt"
@@ -74,6 +106,8 @@ export default {
     return {
       prompt: '',
       messages: [],
+      systemPrompt: '',
+      showSystemPrompt: false,
       md: markRaw(new MarkdownIt({
         html: true,
         linkify: true,
@@ -122,14 +156,28 @@ export default {
       };
       this.messages.push(aiMessage);
 
+      // Prepare messages for API call
+      const messagesToSend = [];
+      
+      // Add system message if present
+      if (this.systemPrompt.trim()) {
+        messagesToSend.push({
+          role: 'system',
+          content: this.systemPrompt.trim()
+        });
+      }
+      
+      // Add conversation history (excluding the empty assistant message we just added)
+      messagesToSend.push(...this.messages
+        .slice(0, -1)
+        .map(msg => ({ role: msg.role, content: msg.content })));
+
       try {
         const response = await fetch(`${this.VITE_SERVER_BASE_URL}/api/ollama`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: this.messages
-              .slice(0, -1)
-              .map(msg => ({ role: msg.role, content: msg.content })),
+            messages: messagesToSend,
             stream: true
           })
         });
@@ -224,6 +272,18 @@ export default {
         console.error('Error al copiar:', err);
         this.showErrorNotification('No se pudo copiar el mensaje');
       });
+    },
+
+    toggleSystemPrompt() {
+      this.showSystemPrompt = !this.showSystemPrompt;
+    },
+
+    clearSystemPrompt() {
+      this.systemPrompt = '';
+    },
+
+    usePresetPrompt() {
+      this.systemPrompt = 'Eres un asistente útil que responde de manera concisa y clara. Siempre mantén un tono profesional y amigable.';
     },
 
     showSuccessNotification(message) {
@@ -365,6 +425,114 @@ body {
   flex-direction: column;
   height: 90vh; /* Altura del chat */
   box-sizing: border-box; /* Asegura que el padding no afecte el ancho */
+}
+
+/* System Prompt Section */
+.system-prompt-section {
+  background-color: #2a2a2a;
+  border-bottom: 1px solid #444;
+  border-radius: 8px 8px 0 0;
+}
+
+.system-prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.system-prompt-header:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.system-prompt-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #f5f5f5;
+}
+
+.toggle-icon {
+  transition: transform 0.2s ease;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.toggle-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.system-prompt-container {
+  padding: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.system-prompt-input {
+  width: 100%;
+  min-height: 80px;
+  padding: 0.8rem;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background-color: #444;
+  color: #f5f5f5;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 0.9rem;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.system-prompt-input:focus {
+  outline: none;
+  border-color: #4166d5;
+  box-shadow: 0 0 0 2px rgba(65, 102, 213, 0.2);
+}
+
+.system-prompt-input::placeholder {
+  color: #888;
+  font-style: italic;
+}
+
+.system-prompt-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+  justify-content: flex-end;
+}
+
+.clear-button, .preset-button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background-color: #444;
+  color: #f5f5f5;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clear-button:hover {
+  background-color: #dc3545;
+  border-color: #dc3545;
+}
+
+.preset-button:hover {
+  background-color: #4166d5;
+  border-color: #4166d5;
+}
+
+.clear-button:disabled, .preset-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #444;
+  border-color: #555;
+}
+
+.clear-button:disabled:hover, .preset-button:disabled:hover {
+  background-color: #444;
+  border-color: #555;
 }
 
 /* Contenedor de mensajes */
