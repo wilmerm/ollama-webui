@@ -146,6 +146,8 @@ export default {
   beforeUnmount() {
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
+      // Save immediately if there was a pending save to avoid data loss
+      this.saveSystemPrompt();
     }
   },
 
@@ -301,6 +303,8 @@ export default {
 
     usePresetPrompt() {
       this.systemPrompt = 'Eres un asistente útil que responde de manera concisa y clara. Siempre mantén un tono profesional y amigable.';
+      // Save immediately since this is a user action
+      this.saveSystemPrompt();
     },
 
     /**
@@ -309,9 +313,13 @@ export default {
     async loadSystemPrompt() {
       try {
         if (systemPromptCrypto.constructor.isSupported()) {
+          console.debug('Loading system prompt...');
           const savedPrompt = await systemPromptCrypto.loadSystemPrompt();
           if (savedPrompt) {
             this.systemPrompt = savedPrompt;
+            console.debug('System prompt loaded successfully');
+          } else {
+            console.debug('No saved system prompt found');
           }
         } else {
           console.warn('Web Crypto API not supported, system prompts will not be persisted securely');
@@ -327,7 +335,9 @@ export default {
     async saveSystemPrompt() {
       try {
         if (systemPromptCrypto.constructor.isSupported()) {
+          console.debug('Saving system prompt:', this.systemPrompt ? 'content present' : 'empty');
           await systemPromptCrypto.saveSystemPrompt(this.systemPrompt);
+          console.debug('System prompt saved successfully');
         }
       } catch (error) {
         console.warn('Failed to save system prompt:', error);
