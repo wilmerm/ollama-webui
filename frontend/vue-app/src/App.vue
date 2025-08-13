@@ -284,12 +284,47 @@ export default {
     },
 
     copyMessage(content) {
-      navigator.clipboard.writeText(content).then(() => {
-        this.showSuccessNotification('Mensaje copiado al portapapeles');
-      }).catch(err => {
-        console.error('Error al copiar:', err);
-        this.showErrorNotification('No se pudo copiar el mensaje');
-      });
+      // Check if the Clipboard API is available
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        // Use modern Clipboard API
+        navigator.clipboard.writeText(content).then(() => {
+          this.showSuccessNotification('Mensaje copiado al portapapeles');
+        }).catch(err => {
+          console.error('Error al copiar:', err);
+          this.showErrorNotification('No se pudo copiar el mensaje');
+        });
+      } else {
+        // Fallback to execCommand for older browsers or insecure contexts
+        this.copyMessageFallback(content);
+      }
+    },
+
+    copyMessageFallback(content) {
+      try {
+        // Create a temporary textarea element
+        const textArea = document.createElement('textarea');
+        textArea.value = content;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-9999px';
+        textArea.style.opacity = '0';
+        
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        // Try to copy using the deprecated but widely supported execCommand
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+          this.showSuccessNotification('Mensaje copiado al portapapeles');
+        } else {
+          throw new Error('execCommand failed');
+        }
+      } catch (err) {
+        console.error('Error al copiar (fallback):', err);
+        this.showErrorNotification('No se pudo copiar el mensaje. Tu navegador podría no soportar esta función o necesita una conexión segura (HTTPS).');
+      }
     },
 
     toggleSystemPrompt() {
