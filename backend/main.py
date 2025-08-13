@@ -84,13 +84,13 @@ async def add_security_headers(request, call_next):
     return response
 
 
-async def generate_ollama_stream(ollama_url: str, json: dict):
+async def generate_ollama_stream(ollama_url: str, json: dict, timeout: int = 60):
     async with httpx.AsyncClient() as client:  # Cliente dentro del generador
         async with client.stream(
             "POST",
             ollama_url,
             json=json,
-            timeout=60,
+            timeout=timeout,
         ) as response:
             if response.status_code != 200:
                 error_detail = await response.text()
@@ -110,7 +110,7 @@ async def ask_ollama(request: ChatRequest):
     # Un modelo pesado puede tardar más en responder y se puede agotar el tiempo
     default_timeout = float(os.getenv("DEFAULT_TIMEOUT", 60))
 
-    default_model = os.getenv("DEFAULT_MODEL", "deepseek-r1:1.5b")
+    default_model = os.getenv("DEFAULT_MODEL", "llama3.3")
     model = request.model or default_model
 
     default_temperature = float(os.getenv("DEFAULT_TEMPERATURE", 0.5))
@@ -133,7 +133,8 @@ async def ask_ollama(request: ChatRequest):
                         "options": {
                             "temperature": temperature,
                         },
-                    }
+                    },
+                    timeout=default_timeout,
                 ),
                 media_type="application/x-ndjson",
             )
