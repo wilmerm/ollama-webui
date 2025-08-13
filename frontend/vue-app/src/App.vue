@@ -385,7 +385,14 @@ export default {
             console.debug('No saved system prompt found');
           }
         } else {
-          console.warn('Web Crypto API not supported, system prompts will not be persisted securely');
+          console.warn('Web Crypto API not supported, loading unencrypted system prompt as fallback');
+          const unencryptedPrompt = localStorage.getItem('ollama-webui-system-prompt-unencrypted');
+          if (unencryptedPrompt) {
+            this.systemPrompt = unencryptedPrompt;
+            console.debug('Unencrypted system prompt loaded successfully');
+          } else {
+            console.debug('No saved unencrypted system prompt found');
+          }
         }
       } catch (error) {
         console.warn('Failed to load system prompt:', error);
@@ -402,7 +409,14 @@ export default {
           await systemPromptCrypto.saveSystemPrompt(this.systemPrompt);
           console.debug('System prompt saved successfully');
         } else {
-          console.warn('Web Crypto API not supported, system prompts will not be persisted securely');
+          console.warn('Web Crypto API not supported, saving unencrypted system prompt as fallback');
+          if (!this.systemPrompt || this.systemPrompt.trim() === '') {
+            localStorage.removeItem('ollama-webui-system-prompt-unencrypted');
+            console.debug('Empty system prompt - removed from unencrypted storage');
+          } else {
+            localStorage.setItem('ollama-webui-system-prompt-unencrypted', this.systemPrompt);
+            console.debug('Unencrypted system prompt saved successfully');
+          }
         }
       } catch (error) {
         console.warn('Failed to save system prompt:', error);
