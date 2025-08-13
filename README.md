@@ -6,6 +6,7 @@ Ollama WebUI is a minimalist, easy-to-use web interface built with **FastAPI** a
 
 ## Features
 - Simple, responsive web interface.
+- **System prompts** (custom instructions) to define AI behavior.
 - FastAPI backend + Vue.js frontend.
 - Seamless integration with local Ollama models.
 - Docker support for quick deployment.
@@ -94,6 +95,24 @@ ollama run llama3.1:latest
 ```
 
 > **Note:** You don’t need to run the model manually when using Ollama WebUI. The app will automatically start the model specified in `.env` if it’s not already running.
+
+---
+
+## System Prompts (Custom Instructions)
+
+Ollama WebUI supports **system prompts** to customize AI behavior. Click the **"⚙️ Instrucciones del Sistema"** section above the chat to:
+
+- Define custom AI personality and behavior
+- Set context that persists throughout the conversation  
+- Use preset examples or create your own instructions
+- Enable/disable as needed during conversations
+
+**Example system prompts:**
+- `"You are an IT security expert. Always answer from a cybersecurity perspective."`
+- `"Always respond in Spanish and help me learn the language."`
+- `"You are a helpful assistant who answers concisely and clearly."`
+
+For detailed documentation, see [docs/SYSTEM_PROMPTS.md](docs/SYSTEM_PROMPTS.md).
 
 ---
 
