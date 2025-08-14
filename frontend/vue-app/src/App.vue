@@ -114,6 +114,49 @@
         </div>
       </div>
 
+      <!-- Temperature Control Section -->
+      <div class="temperature-control-section">
+        <div class="temperature-control-header" @click="toggleTemperatureControl">
+          <span class="temperature-control-title">🌡️ Control de Temperatura</span>
+          <span class="toggle-icon" :class="{ 'expanded': showTemperatureControl }">▼</span>
+        </div>
+        <div class="temperature-control-container" v-show="showTemperatureControl">
+          <div class="temperature-control-content">
+            <label for="temperature-slider" class="temperature-label">
+              Temperatura: {{ temperature.toFixed(1) }}
+              <span class="temperature-description">
+                ({{ temperature <= 0.3 ? 'Muy determinista' : temperature <= 0.7 ? 'Equilibrado' : temperature <= 1.2 ? 'Creativo' : 'Muy creativo' }})
+              </span>
+            </label>
+            <div class="temperature-slider-container">
+              <input
+                id="temperature-slider"
+                type="range"
+                v-model.number="temperature"
+                min="0.0"
+                max="2.0"
+                step="0.1"
+                class="temperature-slider"
+                :disabled="awaitingResponse"
+              />
+              <div class="temperature-marks">
+                <span>0.0</span>
+                <span>0.5</span>
+                <span>1.0</span>
+                <span>1.5</span>
+                <span>2.0</span>
+              </div>
+            </div>
+            <div class="temperature-help">
+              <small>
+                💡 Valores bajos (0.0-0.5): Respuestas más consistentes y predecibles<br>
+                💡 Valores altos (1.0-2.0): Respuestas más creativas y variadas
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="input-group">
         <textarea
           v-model="prompt"
@@ -162,6 +205,9 @@ export default {
       selectedModel: '',
       showModelSelector: false,
       loadingModels: false,
+      // Temperature control data
+      temperature: 0.5,
+      showTemperatureControl: false,
       md: markRaw(new MarkdownIt({
         html: true,
         linkify: true,
@@ -187,6 +233,7 @@ export default {
     this.VITE_SERVER_BASE_URL = import.meta.env.VITE_SERVER_BASE_URL || '';
     this.scrollToBottom();
     await this.loadSystemPrompt();
+    this.loadTemperature();
     await this.fetchAvailableModels();
   },
 
@@ -202,6 +249,10 @@ export default {
       } else {
         localStorage.removeItem('ollama-webui-selected-model');
       }
+    },
+    temperature(newValue) {
+      // Save temperature to localStorage
+      localStorage.setItem('ollama-webui-temperature', newValue.toString());
     }
   },
 
@@ -259,6 +310,7 @@ export default {
           body: JSON.stringify({
             messages: messagesToSend,
             model: this.selectedModel || undefined,
+            temperature: this.temperature,
             stream: true
           })
         });
@@ -620,6 +672,21 @@ export default {
     getModelDetails(modelName) {
       return this.availableModels.find(m => m.name === modelName);
     },
+
+    /* Temperature Control Methods */
+    toggleTemperatureControl() {
+      this.showTemperatureControl = !this.showTemperatureControl;
+    },
+
+    loadTemperature() {
+      const savedTemperature = localStorage.getItem('ollama-webui-temperature');
+      if (savedTemperature) {
+        const tempValue = parseFloat(savedTemperature);
+        if (!isNaN(tempValue) && tempValue >= 0.0 && tempValue <= 2.0) {
+          this.temperature = tempValue;
+        }
+      }
+    },
   }
 }
 
@@ -939,6 +1006,125 @@ body {
   cursor: not-allowed;
   background-color: #444;
   border-color: #555;
+}
+
+/* Temperature Control Section */
+.temperature-control-section {
+  background-color: #2a2a2a;
+  border-bottom: 1px solid #444;
+  margin-top: 1px;
+}
+
+.temperature-control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.temperature-control-header:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.temperature-control-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #f5f5f5;
+}
+
+.temperature-control-container {
+  padding: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.temperature-control-content {
+  margin-bottom: 0.8rem;
+}
+
+.temperature-label {
+  display: block;
+  color: #f5f5f5;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.temperature-description {
+  font-size: 0.8rem;
+  color: #888;
+  font-weight: normal;
+  margin-left: 0.5rem;
+}
+
+.temperature-slider-container {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.temperature-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #4CAF50 0%, #FFC107 50%, #FF5722 100%);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.temperature-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #f5f5f5;
+  cursor: pointer;
+  border: 2px solid #4166d5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.temperature-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.temperature-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #f5f5f5;
+  cursor: pointer;
+  border: 2px solid #4166d5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.temperature-slider:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.temperature-slider:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+  background: #666;
+  border-color: #555;
+}
+
+.temperature-marks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-size: 0.7rem;
+  color: #888;
+}
+
+.temperature-help {
+  color: #888;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 /* Contenedor de mensajes */
