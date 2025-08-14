@@ -1,5 +1,7 @@
 import os
 import logging
+import subprocess
+import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
@@ -98,6 +100,116 @@ async def generate_ollama_stream(ollama_url: str, json: dict, timeout: int = 60)
 
             async for chunk in response.aiter_bytes():  # Transmite chunk por chunk
                 yield chunk
+
+
+@app.get("/api/models")
+async def get_models():
+    """
+    Get available models from Ollama and their running status
+    """
+    try:
+        # Get list of available models
+        result_list = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        # Get list of running models
+        result_ps = subprocess.run(
+            ["ollama", "ps"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result_list.returncode != 0:
+            logging.error(f"Failed to get models: {result_list.stderr}")
+            raise HTTPException(status_code=503, detail="Ollama service unavailable")
+        
+        # Parse available models
+        available_models = []
+        running_models = set()
+        
+        # Parse ollama list output
+        lines = result_list.stdout.strip().split('\n')
+        if len(lines) > 1:  # Skip header line
+            for line in lines[1:]:
+                parts = line.split()
+                if len(parts) >= 4:  # NAME, ID, SIZE, MODIFIED
+                    model_name = parts[0]
+                    model_id = parts[1]
+                    model_size = parts[2]
+                    # Join remaining parts for modified time
+                    modified = ' '.join(parts[3:])
+                    
+                    available_models.append({
+                        "name": model_name,
+                        "id": model_id,
+                        "size": model_size,
+                        "modified": modified,
+                        "running": False  # Will be updated below
+                    })
+        
+        # Parse ollama ps output to identify running models
+        if result_ps.returncode == 0:
+            ps_lines = result_ps.stdout.strip().split('\n')
+            if len(ps_lines) > 1:  # Skip header line
+                for line in ps_lines[1:]:
+                    parts = line.split()
+                    if len(parts) >= 1:
+                        running_model_name = parts[0]
+                        running_models.add(running_model_name)
+        
+        # Update running status
+        for model in available_models:
+            if model["name"] in running_models:
+                model["running"] = True
+        
+        return {
+            "models": available_models,
+            "running_models": list(running_models)
+        }
+        
+    except FileNotFoundError:
+        # Ollama command not found - return mock data for development/testing
+        logging.warning("Ollama command not found - returning mock data")
+        return {
+            "models": [
+                {
+                    "name": "llama3.3",
+                    "id": "365c0bd3c000",
+                    "size": "4.9 GB",
+                    "modified": "2 hours ago",
+                    "running": True
+                },
+                {
+                    "name": "qwen3:1.7b",
+                    "id": "123456789a12",
+                    "size": "1.4 GB", 
+                    "modified": "5 hours ago",
+                    "running": False
+                },
+                {
+                    "name": "gemma3:1b",
+                    "id": "123456aa123a",
+                    "size": "900.16 MB",
+                    "modified": "3 days ago",
+                    "running": False
+                }
+            ],
+            "running_models": ["llama3.3"]
+        }
+    except subprocess.TimeoutExpired:
+        logging.error("Timeout executing ollama commands")
+        raise HTTPException(status_code=504, detail="Ollama service timeout")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error executing ollama commands: {e}")
+        raise HTTPException(status_code=503, detail="Ollama service unavailable")
+    except Exception as e:
+        logging.error(f"Unexpected error getting models: {type(e).__name__}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/api/ollama")
