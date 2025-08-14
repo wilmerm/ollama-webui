@@ -142,8 +142,8 @@ async def get_models():
     except httpx.ConnectError:
         logging.error("Cannot connect to Ollama service")
         raise HTTPException(status_code=503, detail="AI service unavailable")
-    except httpx.TimeoutException:
-        logging.error("Request timeout to Ollama service")
+    except httpx.TimeoutException as e:
+        logging.error(f"Request timeout to Ollama service: {e}")
         raise HTTPException(status_code=504, detail="AI service timeout")
     except Exception as e:
         logging.error(f"Unexpected error: {type(e).__name__}", exc_info=True)
@@ -163,7 +163,7 @@ async def ask_ollama(request: ChatRequest):
     default_model = os.getenv("DEFAULT_MODEL", "llama3.3")
     model = request.model or default_model
 
-    default_temperature = float(os.getenv("DEFAULT_TEMPERATURE", 0.5))
+    default_temperature = float(os.getenv("DEFAULT_TEMPERATURE", 0.5) or 0.5)
     temperature = request.temperature or default_temperature
 
     messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]

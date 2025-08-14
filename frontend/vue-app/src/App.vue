@@ -1,172 +1,189 @@
 <template>
   <div class="container">
-    <div class="chat">
-      <div class="chat-box" ref="chatBox">
-        <div
-          v-for="(msg, index) in messages"
-          :key="index"
-          class="message"
-          :class="{ 'assistant-message': msg.role === 'assistant', 'user-message': msg.role === 'user' }"
-        >
-          <div class="message-header" v-if="msg.role === 'assistant'">
-            <span class="message-role">😊</span>
-            <button
-              class="copy-button"
-              @click="copyMessage(msg.content)"
-              title="Copiar mensaje"
-            >
-              📋
-            </button>
+    <div class="d-flex flex-column flex-md-row gap-3">
+      <div class="sidebar">
+        <!-- System Prompt Section -->
+        <div class="system-prompt-section">
+          <div class="system-prompt-header" @click="toggleSystemPrompt">
+            <span class="system-prompt-title">⚙️ Instrucciones del Sistema</span>
+            <span class="toggle-icon" :class="{ 'expanded': showSystemPrompt }">▼</span>
           </div>
-          <div
-            class="message-content"
-            :class="{ 'typewriter': msg.role === 'assistant' && msg.isTyping }"
-            v-html="msg.formattedContent || msg.content"
-          ></div>
-          <div v-if="index === messages.length - 1 && awaitingResponse" class="typing-indicator">
-            <div class="dot"></div>
-            <div class="dot"></div>
-            <div class="dot"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- System Prompt Section -->
-      <div class="system-prompt-section">
-        <div class="system-prompt-header" @click="toggleSystemPrompt">
-          <span class="system-prompt-title">⚙️ Instrucciones del Sistema</span>
-          <span class="toggle-icon" :class="{ 'expanded': showSystemPrompt }">▼</span>
-        </div>
-        <div class="system-prompt-container" v-show="showSystemPrompt">
-          <textarea
-            v-model="systemPrompt"
-            placeholder="Eres un asistente útil. Define aquí el comportamiento del modelo..."
-            class="system-prompt-input"
-            :disabled="awaitingResponse"
-          ></textarea>
-          <div class="system-prompt-actions">
-            <button
-              @click="clearSystemPrompt"
-              class="clear-button"
-              :disabled="!systemPrompt.trim() || awaitingResponse"
-            >
-              🗑️ Limpiar
-            </button>
-            <button
-              @click="usePresetPrompt"
-              class="preset-button"
+          <div class="system-prompt-container" v-show="showSystemPrompt">
+            <textarea
+              v-model="systemPrompt"
+              placeholder="Eres un asistente útil. Define aquí el comportamiento del modelo..."
+              class="system-prompt-input"
               :disabled="awaitingResponse"
-            >
-              📋 Usar Ejemplo
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Model Selector Section -->
-      <div class="model-selector-section">
-        <div class="model-selector-header" @click="toggleModelSelector">
-          <span class="model-selector-title">🤖 Selector de Modelo</span>
-          <span class="toggle-icon" :class="{ 'expanded': showModelSelector }">▼</span>
-        </div>
-        <div class="model-selector-container" v-show="showModelSelector">
-          <div class="model-selector-content">
-            <label for="model-select" class="model-label">Modelo:</label>
-            <select
-              id="model-select"
-              v-model="selectedModel"
-              class="model-select"
-              :disabled="awaitingResponse"
-            >
-              <option value="" disabled>Seleccionar modelo...</option>
-              <option
-                v-for="model in availableModels"
-                :key="model.name"
-                :value="model.name"
-                :class="{ 'running-model': model.running }"
+            ></textarea>
+            <div class="system-prompt-actions">
+              <button
+                @click="clearSystemPrompt"
+                class="clear-button"
+                :disabled="!systemPrompt.trim() || awaitingResponse"
               >
-                {{ model.name }} 
-                <span v-if="model.running" class="running-badge">● Activo</span>
-                ({{ model.size }})
-              </option>
-            </select>
-            <div v-if="selectedModel" class="model-info">
-              <div class="model-details">
-                <span class="model-name">{{ selectedModel }}</span>
-                <span v-if="getModelDetails(selectedModel)?.running" class="status-badge running">Activo</span>
-                <span v-else class="status-badge stopped">Inactivo</span>
+                🗑️ Limpiar
+              </button>
+              <button
+                @click="usePresetPrompt"
+                class="preset-button"
+                :disabled="awaitingResponse"
+              >
+                📋 Usar Ejemplo
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Model Selector Section -->
+        <div class="model-selector-section">
+          <div class="model-selector-header" @click="toggleModelSelector">
+            <span class="model-selector-title">🤖 Selector de Modelo</span>
+            <span class="toggle-icon" :class="{ 'expanded': showModelSelector }">▼</span>
+          </div>
+          <div class="model-selector-container" v-show="showModelSelector">
+            <div class="model-selector-content">
+              <label for="model-select" class="model-label">Modelo:</label>
+              <select
+                id="model-select"
+                v-model="selectedModel"
+                class="model-select"
+                :disabled="awaitingResponse"
+              >
+                <option value="" disabled>Seleccionar modelo...</option>
+                <option
+                  v-for="model in availableModels"
+                  :key="model.name"
+                  :value="model.name"
+                  :class="{ 'running-model': model.running }"
+                >
+                  {{ model.name }}
+                  <span v-if="model.running" class="running-badge">● Activo</span>
+                  ({{ model.size }})
+                </option>
+              </select>
+              <div v-if="selectedModel" class="model-info">
+                <div class="model-details">
+                  <span class="model-name">{{ selectedModel }}</span>
+                  <span v-if="getModelDetails(selectedModel)?.running" class="status-badge running">Activo</span>
+                  <span v-else class="status-badge stopped">Inactivo</span>
+                </div>
+                <div v-if="getModelDetails(selectedModel)" class="model-meta">
+                  Tamaño: {{ getModelDetails(selectedModel).size }} |
+                  Modificado: {{ getModelDetails(selectedModel).modified }}
+                </div>
               </div>
-              <div v-if="getModelDetails(selectedModel)" class="model-meta">
-                Tamaño: {{ getModelDetails(selectedModel).size }} | 
-                Modificado: {{ getModelDetails(selectedModel).modified }}
+            </div>
+            <div class="model-actions">
+              <button
+                @click="refreshModels"
+                class="refresh-button"
+                :disabled="awaitingResponse || loadingModels"
+              >
+                🔄 {{ loadingModels ? 'Actualizando...' : 'Actualizar' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Temperature Control Section -->
+        <div class="temperature-control-section">
+          <div class="temperature-control-header" @click="toggleTemperatureControl">
+            <span class="temperature-control-title">🌡️ Control de Temperatura</span>
+            <span class="toggle-icon" :class="{ 'expanded': showTemperatureControl }">▼</span>
+          </div>
+          <div class="temperature-control-container" v-show="showTemperatureControl">
+            <div class="temperature-control-content">
+              <label for="temperature-slider" class="temperature-label">
+                Temperatura: {{ temperature.toFixed(1) }}
+                <span class="temperature-description">
+                  ({{ temperature <= 0.3 ? 'Muy determinista' : temperature <= 0.7 ? 'Equilibrado' : temperature <= 1.2 ? 'Creativo' : 'Muy creativo' }})
+                </span>
+              </label>
+              <div class="temperature-slider-container">
+                <input
+                  id="temperature-slider"
+                  type="range"
+                  v-model.number="temperature"
+                  min="0.0"
+                  max="2.0"
+                  step="0.1"
+                  class="temperature-slider"
+                  :disabled="awaitingResponse"
+                />
+                <div class="temperature-marks">
+                  <span>0.0</span>
+                  <span>0.5</span>
+                  <span>1.0</span>
+                  <span>1.5</span>
+                  <span>2.0</span>
+                </div>
+              </div>
+              <div class="temperature-help">
+                <small>
+                  💡 Valores bajos (0.0-0.5): Respuestas más consistentes y predecibles<br>
+                  💡 Valores altos (1.0-2.0): Respuestas más creativas y variadas
+                </small>
               </div>
             </div>
           </div>
-          <div class="model-actions">
-            <button
-              @click="refreshModels"
-              class="refresh-button"
-              :disabled="awaitingResponse || loadingModels"
-            >
-              🔄 {{ loadingModels ? 'Actualizando...' : 'Actualizar' }}
-            </button>
-          </div>
         </div>
-      </div>
 
-      <!-- Temperature Control Section -->
-      <div class="temperature-control-section">
-        <div class="temperature-control-header" @click="toggleTemperatureControl">
-          <span class="temperature-control-title">🌡️ Control de Temperatura</span>
-          <span class="toggle-icon" :class="{ 'expanded': showTemperatureControl }">▼</span>
-        </div>
-        <div class="temperature-control-container" v-show="showTemperatureControl">
-          <div class="temperature-control-content">
-            <label for="temperature-slider" class="temperature-label">
-              Temperatura: {{ temperature.toFixed(1) }}
-              <span class="temperature-description">
-                ({{ temperature <= 0.3 ? 'Muy determinista' : temperature <= 0.7 ? 'Equilibrado' : temperature <= 1.2 ? 'Creativo' : 'Muy creativo' }})
-              </span>
-            </label>
-            <div class="temperature-slider-container">
+        <!-- Stream Control Section -->
+        <div class="stream-control-section">
+          <div class="stream-control-container">
+            <label class="stream-label">
               <input
-                id="temperature-slider"
-                type="range"
-                v-model.number="temperature"
-                min="0.0"
-                max="2.0"
-                step="0.1"
-                class="temperature-slider"
+                type="checkbox"
+                v-model="stream"
                 :disabled="awaitingResponse"
               />
-              <div class="temperature-marks">
-                <span>0.0</span>
-                <span>0.5</span>
-                <span>1.0</span>
-                <span>1.5</span>
-                <span>2.0</span>
-              </div>
-            </div>
-            <div class="temperature-help">
-              <small>
-                💡 Valores bajos (0.0-0.5): Respuestas más consistentes y predecibles<br>
-                💡 Valores altos (1.0-2.0): Respuestas más creativas y variadas
-              </small>
-            </div>
+              Streaming
+            </label>
           </div>
         </div>
       </div>
+      <div class="chat">
+        <div class="chat-box" ref="chatBox">
+          <div
+            v-for="(msg, index) in messages"
+            :key="index"
+            class="message"
+            :class="{ 'assistant-message': msg.role === 'assistant', 'user-message': msg.role === 'user' }"
+          >
+            <div class="message-header" v-if="msg.role === 'assistant'">
+              <span class="message-role">😊</span>
+              <button
+                class="copy-button"
+                @click="copyMessage(msg.content)"
+                title="Copiar mensaje"
+              >
+                📋
+              </button>
+            </div>
+            <div
+              class="message-content"
+              :class="{ 'typewriter': msg.role === 'assistant' && msg.isTyping }"
+              v-html="msg.formattedContent || msg.content"
+            ></div>
+            <div v-if="index === messages.length - 1 && awaitingResponse" class="typing-indicator">
+              <div class="dot"></div>
+              <div class="dot"></div>
+              <div class="dot"></div>
+            </div>
+          </div>
+        </div>
 
-      <div class="input-group">
-        <textarea
-          v-model="prompt"
-          placeholder="Escribe tu mensaje..."
-          @keydown.enter.exact.prevent="sendPrompt"
-          :disabled="awaitingResponse"
-        ></textarea>
-        <button @click="sendPrompt" :disabled="awaitingResponse">
-          {{ awaitingResponse ? 'Enviando...' : 'Enviar' }}
-        </button>
+        <div class="input-group">
+          <textarea
+            v-model="prompt"
+            placeholder="Escribe tu mensaje..."
+            @keydown.enter.exact.prevent="sendPrompt"
+            :disabled="awaitingResponse"
+          ></textarea>
+          <button @click="sendPrompt" :disabled="awaitingResponse">
+            {{ awaitingResponse ? 'Enviando...' : 'Enviar' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -208,6 +225,8 @@ export default {
       // Temperature control data
       temperature: 0.5,
       showTemperatureControl: false,
+      // stream control
+      stream: true,
       md: markRaw(new MarkdownIt({
         html: true,
         linkify: true,
@@ -234,6 +253,7 @@ export default {
     this.scrollToBottom();
     await this.loadSystemPrompt();
     this.loadTemperature();
+    this.loadStream();
     await this.fetchAvailableModels();
   },
 
@@ -253,6 +273,10 @@ export default {
     temperature(newValue) {
       // Save temperature to localStorage
       localStorage.setItem('ollama-webui-temperature', newValue.toString());
+    },
+    stream(newValue) {
+      // Save strem to localStorage
+      localStorage.setItem('ollama-webui-stream', newValue.toString());
     }
   },
 
@@ -311,7 +335,7 @@ export default {
             messages: messagesToSend,
             model: this.selectedModel || undefined,
             temperature: this.temperature,
-            stream: true
+            stream: this.stream
           })
         });
 
@@ -350,7 +374,6 @@ export default {
                     const preprocessedContent = this.preprocessThinkingTags(aiMessage.content);
                     aiMessage.formattedContent = this.md.render(preprocessedContent);
                     this.messages = [...this.messages];
-                    this.smoothScrollToBottom();
                   }
                 } catch (error) {
                   console.error('Error parsing JSON chunk:', line, error);
@@ -377,6 +400,9 @@ export default {
 
         // Finalizar animación de escritura
         aiMessage.isTyping = false;
+
+        // Scroll to bottom after response
+        this.smoothScrollToBottom();
 
       } catch (error) {
         console.error('Error:', error);
@@ -494,22 +520,17 @@ export default {
     async loadSystemPrompt() {
       try {
         if (systemPromptCrypto.constructor.isSupported()) {
-          console.debug('Loading system prompt...');
           const savedPrompt = await systemPromptCrypto.loadSystemPrompt();
           if (savedPrompt) {
             this.systemPrompt = savedPrompt;
-            console.debug('System prompt loaded successfully');
-          } else {
-            console.debug('No saved system prompt found');
           }
         } else {
           console.warn('Web Crypto API not supported, loading unencrypted system prompt as fallback');
           const unencryptedPrompt = localStorage.getItem('ollama-webui-system-prompt-unencrypted');
           if (unencryptedPrompt) {
-            this.systemPrompt = unencryptedPrompt;
-            console.debug('Unencrypted system prompt loaded successfully');
-          } else {
-            console.debug('No saved unencrypted system prompt found');
+            // Decode from base64 if it was saved that way
+            const decodedPrompt = atob(unencryptedPrompt);
+            this.systemPrompt = decodeURIComponent(escape(decodedPrompt));
           }
         }
       } catch (error) {
@@ -523,17 +544,15 @@ export default {
     async saveSystemPrompt() {
       try {
         if (systemPromptCrypto.constructor.isSupported()) {
-          console.debug('Saving system prompt:', this.systemPrompt ? 'content present' : 'empty');
           await systemPromptCrypto.saveSystemPrompt(this.systemPrompt);
-          console.debug('System prompt saved successfully');
         } else {
           console.warn('Web Crypto API not supported, saving unencrypted system prompt as fallback');
           if (!this.systemPrompt || this.systemPrompt.trim() === '') {
             localStorage.removeItem('ollama-webui-system-prompt-unencrypted');
-            console.debug('Empty system prompt - removed from unencrypted storage');
           } else {
-            localStorage.setItem('ollama-webui-system-prompt-unencrypted', this.systemPrompt);
-            console.debug('Unencrypted system prompt saved successfully');
+            // save in base64
+            const encodedPrompt = btoa(decodeURIComponent(encodeURIComponent(this.systemPrompt)));
+            localStorage.setItem('ollama-webui-system-prompt-unencrypted', encodedPrompt);
           }
         }
       } catch (error) {
@@ -646,7 +665,7 @@ export default {
         }
         const data = await response.json();
         this.availableModels = data.models || [];
-        
+
         // Load saved model selection or use first available model
         const savedModel = localStorage.getItem('ollama-webui-selected-model');
         if (savedModel && this.availableModels.some(m => m.name === savedModel)) {
@@ -687,6 +706,15 @@ export default {
         }
       }
     },
+
+    loadStream() {
+      const savedStream = localStorage.getItem('ollama-webui-stream');
+      if (savedStream) {
+        const streamValue = savedStream === 'true';
+        this.stream = streamValue;
+      }
+    }
+
   }
 }
 
@@ -738,16 +766,39 @@ body {
   padding: 1rem;
 }
 
+.d-flex {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.flex-column {
+  flex-direction: column;
+}
+
+.flex-md-row {
+  flex-direction: row;
+}
+
+.gap-3 {
+  gap: 1rem;
+}
+
 /* Estilos del chat */
 .chat {
-  width: 100%;
+  width: 50%;
   border-radius: 8px;
   background-color: #333;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
-  height: 90vh; /* Altura del chat */
-  box-sizing: border-box; /* Asegura que el padding no afecte el ancho */
+  height: 90vh;
+  box-sizing: border-box;
+}
+
+.sidebar {
+  width: 30%;
+  margin-top: 1rem;
 }
 
 /* System Prompt Section */
@@ -1127,6 +1178,17 @@ body {
   line-height: 1.4;
 }
 
+.stream-control-section {
+  background-color: #2a2a2a;
+  border-bottom: 1px solid #444;
+  margin-top: 1px;
+}
+
+.stream-control-container {
+  padding: 0.8rem 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 /* Contenedor de mensajes */
 .chat-box {
   flex: 1;
@@ -1400,8 +1462,6 @@ button:disabled {
   border-left: 4px solid #4166d5;
   margin: 1.5rem 0;
   padding: 1rem 1.5rem;
-  background: rgba(65, 102, 213, 0.1);
-  border-radius: 0 6px 6px 0;
   font-style: italic;
 }
 
@@ -1411,12 +1471,8 @@ button:disabled {
 think {
   color: #888;
   font-size: 0.9em;
-  line-height: 0.75;
+  line-height: 0.5;
   margin: 1rem 0;
-  padding: 0.8rem 1.2rem;
-  background: rgba(136, 136, 136, 0.1);
-  border-left: 3px solid #666;
-  border-radius: 0 4px 4px 0;
   font-style: italic;
 }
 
@@ -1444,7 +1500,7 @@ think {
 }
 
 .notification.success {
-  background: linear-gradient(135deg, #22bb22, #28a745);
+  background: linear-gradient(135deg, #a8d5ba, #c3e6cb);
 }
 
 .notification.error {
