@@ -63,6 +63,57 @@
         </div>
       </div>
 
+      <!-- Model Selector Section -->
+      <div class="model-selector-section">
+        <div class="model-selector-header" @click="toggleModelSelector">
+          <span class="model-selector-title">🤖 Selector de Modelo</span>
+          <span class="toggle-icon" :class="{ 'expanded': showModelSelector }">▼</span>
+        </div>
+        <div class="model-selector-container" v-show="showModelSelector">
+          <div class="model-selector-content">
+            <label for="model-select" class="model-label">Modelo:</label>
+            <select
+              id="model-select"
+              v-model="selectedModel"
+              class="model-select"
+              :disabled="awaitingResponse"
+            >
+              <option value="" disabled>Seleccionar modelo...</option>
+              <option
+                v-for="model in availableModels"
+                :key="model.name"
+                :value="model.name"
+                :class="{ 'running-model': model.running }"
+              >
+                {{ model.name }} 
+                <span v-if="model.running" class="running-badge">● Activo</span>
+                ({{ model.size }})
+              </option>
+            </select>
+            <div v-if="selectedModel" class="model-info">
+              <div class="model-details">
+                <span class="model-name">{{ selectedModel }}</span>
+                <span v-if="getModelDetails(selectedModel)?.running" class="status-badge running">Activo</span>
+                <span v-else class="status-badge stopped">Inactivo</span>
+              </div>
+              <div v-if="getModelDetails(selectedModel)" class="model-meta">
+                Tamaño: {{ getModelDetails(selectedModel).size }} | 
+                Modificado: {{ getModelDetails(selectedModel).modified }}
+              </div>
+            </div>
+          </div>
+          <div class="model-actions">
+            <button
+              @click="refreshModels"
+              class="refresh-button"
+              :disabled="awaitingResponse || loadingModels"
+            >
+              🔄 {{ loadingModels ? 'Actualizando...' : 'Actualizar' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="input-group">
         <textarea
           v-model="prompt"
@@ -106,6 +157,11 @@ export default {
       messages: [],
       systemPrompt: '',
       showSystemPrompt: false,
+      // Model selector data
+      availableModels: [],
+      selectedModel: '',
+      showModelSelector: false,
+      loadingModels: false,
       md: markRaw(new MarkdownIt({
         html: true,
         linkify: true,
@@ -131,12 +187,21 @@ export default {
     this.VITE_SERVER_BASE_URL = import.meta.env.VITE_SERVER_BASE_URL || '';
     this.scrollToBottom();
     await this.loadSystemPrompt();
+    await this.fetchAvailableModels();
   },
 
   watch: {
     systemPrompt(newValue) {
       // Debounced save to avoid too frequent localStorage writes
       this.debounceSaveSystemPrompt();
+    },
+    selectedModel(newValue) {
+      // Save selected model to localStorage
+      if (newValue) {
+        localStorage.setItem('ollama-webui-selected-model', newValue);
+      } else {
+        localStorage.removeItem('ollama-webui-selected-model');
+      }
     }
   },
 
@@ -193,6 +258,7 @@ export default {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: messagesToSend,
+            model: this.selectedModel || undefined,
             stream: true
           })
         });
@@ -513,6 +579,47 @@ export default {
         }
       });
     },
+
+    /* Model Selector Methods */
+    toggleModelSelector() {
+      this.showModelSelector = !this.showModelSelector;
+    },
+
+    async fetchAvailableModels() {
+      this.loadingModels = true;
+      try {
+        const response = await fetch(`${this.VITE_SERVER_BASE_URL}/api/models`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        this.availableModels = data.models || [];
+        
+        // Load saved model selection or use first available model
+        const savedModel = localStorage.getItem('ollama-webui-selected-model');
+        if (savedModel && this.availableModels.some(m => m.name === savedModel)) {
+          this.selectedModel = savedModel;
+        } else if (this.availableModels.length > 0) {
+          // Select first running model or first available model
+          const runningModel = this.availableModels.find(m => m.running);
+          this.selectedModel = runningModel ? runningModel.name : this.availableModels[0].name;
+        }
+      } catch (error) {
+        console.error('Failed to fetch models:', error);
+        this.showErrorNotification('Error al cargar modelos: ' + error.message);
+      } finally {
+        this.loadingModels = false;
+      }
+    },
+
+    async refreshModels() {
+      await this.fetchAvailableModels();
+      this.showSuccessNotification('Modelos actualizados');
+    },
+
+    getModelDetails(modelName) {
+      return this.availableModels.find(m => m.name === modelName);
+    },
   }
 }
 
@@ -680,6 +787,156 @@ body {
 }
 
 .clear-button:disabled:hover, .preset-button:disabled:hover {
+  background-color: #444;
+  border-color: #555;
+}
+
+/* Model Selector Section */
+.model-selector-section {
+  background-color: #2a2a2a;
+  border-bottom: 1px solid #444;
+  margin-top: 1px;
+}
+
+.model-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.model-selector-header:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.model-selector-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #f5f5f5;
+}
+
+.model-selector-container {
+  padding: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.model-selector-content {
+  margin-bottom: 0.8rem;
+}
+
+.model-label {
+  display: block;
+  color: #f5f5f5;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.model-select {
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background-color: #444;
+  color: #f5f5f5;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.model-select:focus {
+  outline: none;
+  border-color: #4166d5;
+  box-shadow: 0 0 0 2px rgba(65, 102, 213, 0.2);
+}
+
+.model-select option {
+  background-color: #444;
+  color: #f5f5f5;
+}
+
+.model-select option.running-model {
+  font-weight: 600;
+}
+
+.model-info {
+  margin-top: 0.8rem;
+  padding: 0.8rem;
+  background-color: #333;
+  border-radius: 6px;
+  border: 1px solid #555;
+}
+
+.model-details {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.model-name {
+  font-weight: 600;
+  color: #f5f5f5;
+  font-size: 0.95rem;
+}
+
+.status-badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.running {
+  background-color: #22bb22;
+  color: white;
+}
+
+.status-badge.stopped {
+  background-color: #666;
+  color: #ccc;
+}
+
+.running-badge {
+  color: #22bb22;
+  font-weight: 600;
+}
+
+.model-meta {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.model-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.refresh-button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background-color: #444;
+  color: #f5f5f5;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background-color: #4166d5;
+  border-color: #4166d5;
+}
+
+.refresh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
   background-color: #444;
   border-color: #555;
 }

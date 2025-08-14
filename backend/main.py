@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from pydantic_settings import BaseSettings
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Any, Optional
 import httpx
 from dotenv import load_dotenv
@@ -29,7 +29,7 @@ class ChatRequest(BaseModel):
     temperature: Optional[float] = Field(0.5, ge=0.0, le=2.0)
     stream: Optional[bool] = False
 
-    @validator('messages')
+    @field_validator('messages')
     def validate_messages(cls, v):
         if not v:
             raise ValueError("Messages cannot be empty")
@@ -98,6 +98,56 @@ async def generate_ollama_stream(ollama_url: str, json: dict, timeout: int = 60)
 
             async for chunk in response.aiter_bytes():  # Transmite chunk por chunk
                 yield chunk
+
+
+@app.get("/api/models")
+async def get_models():
+    """
+    Get available models from Ollama API.
+    Returns a list of models with their details and running status.
+    """
+    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # List of available models
+            list_resp = await client.get(f"{ollama_base_url}/api/tags", timeout=10)
+            if list_resp.status_code != 200:
+                raise HTTPException(status_code=503, detail="Ollama API is not available")
+
+            # List of running models
+            ps_resp = await client.get(f"{ollama_base_url}/api/ps", timeout=10)
+            if ps_resp.status_code != 200:
+                raise HTTPException(status_code=503, detail="Ollama API is not available")
+
+        available_models = list_resp.json().get("models", [])
+        running_models = {m["name"] for m in ps_resp.json().get("models", [])}
+
+        # Prepare the response with model details
+        models_info = []
+        for model in available_models:
+            models_info.append({
+                "name": model.get("name"),
+                "id": model.get("digest", ""),
+                "size": model.get("size", ""),
+                "modified": model.get("modified_at", ""),
+                "running": model.get("name") in running_models
+            })
+
+        return {
+            "models": models_info,
+            "running_models": list(running_models)
+        }
+
+    except httpx.ConnectError:
+        logging.error("Cannot connect to Ollama service")
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+    except httpx.TimeoutException:
+        logging.error("Request timeout to Ollama service")
+        raise HTTPException(status_code=504, detail="AI service timeout")
+    except Exception as e:
+        logging.error(f"Unexpected error: {type(e).__name__}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/api/ollama")
