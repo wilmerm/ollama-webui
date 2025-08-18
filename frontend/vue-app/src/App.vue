@@ -528,9 +528,7 @@ export default {
           console.warn('Web Crypto API not supported, loading unencrypted system prompt as fallback');
           const unencryptedPrompt = localStorage.getItem('ollama-webui-system-prompt-unencrypted');
           if (unencryptedPrompt) {
-            // Decode from base64 if it was saved that way
-            const decodedPrompt = atob(unencryptedPrompt);
-            this.systemPrompt = decodeURIComponent(escape(decodedPrompt));
+            this.systemPrompt = unencryptedPrompt;
           }
         }
       } catch (error) {
@@ -550,9 +548,7 @@ export default {
           if (!this.systemPrompt || this.systemPrompt.trim() === '') {
             localStorage.removeItem('ollama-webui-system-prompt-unencrypted');
           } else {
-            // save in base64
-            const encodedPrompt = btoa(decodeURIComponent(encodeURIComponent(this.systemPrompt)));
-            localStorage.setItem('ollama-webui-system-prompt-unencrypted', encodedPrompt);
+            localStorage.setItem('ollama-webui-system-prompt-unencrypted', this.systemPrompt);
           }
         }
       } catch (error) {
