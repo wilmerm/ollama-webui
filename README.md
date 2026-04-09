@@ -75,6 +75,11 @@ and add:
 Environment="OLLAMA_HOST=0.0.0.0"
 ```
 
+```sh
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
 ## Installing Ollama
 
 Download from the official website:
