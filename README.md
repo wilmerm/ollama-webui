@@ -62,7 +62,13 @@ VITE_SERVER_BASE_URL=http://127.0.0.1:7000  # Only set if backend runs on a diff
 
 ## Ollama Configuration
 
-To allow the backend inside Docker to connect to Ollama, edit the Ollama systemd service file and add:
+To allow the backend inside Docker to connect to Ollama, edit the Ollama systemd service file:
+
+```sh
+sudo systemctl edit ollama.service
+```
+
+and add:
 
 ```ini
 [Service]
