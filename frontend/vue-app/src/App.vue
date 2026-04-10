@@ -1,207 +1,182 @@
 <template>
-  <div class="container">
-    <div class="d-flex flex-column flex-md-row gap-3">
-      <div class="sidebar">
-        <!-- System Prompt Section -->
-        <div class="system-prompt-section">
-          <div class="system-prompt-header" @click="toggleSystemPrompt">
-            <span class="system-prompt-title">⚙️ Instrucciones del Sistema</span>
-            <span class="toggle-icon" :class="{ 'expanded': showSystemPrompt }">▼</span>
-          </div>
-          <div class="system-prompt-container" v-show="showSystemPrompt">
+  <div class="app-shell">
+    <div class="ambient-shape ambient-shape-a"></div>
+    <div class="ambient-shape ambient-shape-b"></div>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <section class="panel card">
+          <button class="panel-header" @click="toggleSystemPrompt" type="button">
+            <span>Instrucciones del sistema</span>
+            <span class="toggle-icon" :class="{ expanded: showSystemPrompt }">⌄</span>
+          </button>
+          <div class="panel-body" v-show="showSystemPrompt">
             <textarea
               v-model="systemPrompt"
-              placeholder="Eres un asistente útil. Define aquí el comportamiento del modelo..."
-              class="system-prompt-input"
+              class="field-textarea"
               :disabled="awaitingResponse"
+              placeholder="Define el comportamiento del asistente..."
             ></textarea>
-            <div class="system-prompt-actions">
-              <button
-                @click="clearSystemPrompt"
-                class="clear-button"
-                :disabled="!systemPrompt.trim() || awaitingResponse"
-              >
-                🗑️ Limpiar
+            <div class="inline-actions">
+              <button class="ghost" @click="clearSystemPrompt" :disabled="!systemPrompt.trim() || awaitingResponse" type="button">
+                Limpiar
               </button>
-              <button
-                @click="usePresetPrompt"
-                class="preset-button"
-                :disabled="awaitingResponse"
-              >
-                📋 Usar Ejemplo
+              <button class="solid" @click="usePresetPrompt" :disabled="awaitingResponse" type="button">
+                Ejemplo
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
-        <!-- Model Selector Section -->
-        <div class="model-selector-section">
-          <div class="model-selector-header" @click="toggleModelSelector">
-            <span class="model-selector-title">🤖 Selector de Modelo</span>
-            <span class="toggle-icon" :class="{ 'expanded': showModelSelector }">▼</span>
-          </div>
-          <div class="model-selector-container" v-show="showModelSelector">
-            <div class="model-selector-content">
-              <label for="model-select" class="model-label">Modelo:</label>
-              <select
-                id="model-select"
-                v-model="selectedModel"
-                class="model-select"
-                :disabled="awaitingResponse"
-              >
-                <option value="" disabled>Seleccionar modelo...</option>
-                <option
-                  v-for="model in availableModels"
-                  :key="model.name"
-                  :value="model.name"
-                  :class="{ 'running-model': model.running }"
-                >
-                  {{ model.name }}
-                  <span v-if="model.running" class="running-badge">● Activo</span>
-                  ({{ model.size }})
-                </option>
-              </select>
-              <div v-if="selectedModel" class="model-info">
-                <div class="model-details">
-                  <span class="model-name">{{ selectedModel }}</span>
-                  <span v-if="getModelDetails(selectedModel)?.running" class="status-badge running">Activo</span>
-                  <span v-else class="status-badge stopped">Inactivo</span>
-                </div>
-                <div v-if="getModelDetails(selectedModel)" class="model-meta">
-                  Tamaño: {{ getModelDetails(selectedModel).size }} |
-                  Modificado: {{ getModelDetails(selectedModel).modified }}
-                </div>
-              </div>
-            </div>
-            <div class="model-actions">
-              <button
-                @click="refreshModels"
-                class="refresh-button"
-                :disabled="awaitingResponse || loadingModels"
-              >
-                🔄 {{ loadingModels ? 'Actualizando...' : 'Actualizar' }}
-              </button>
-            </div>
-          </div>
-        </div>
+        <section class="panel card">
+          <button class="panel-header" @click="toggleModelSelector" type="button">
+            <span>Modelo</span>
+            <span class="toggle-icon" :class="{ expanded: showModelSelector }">⌄</span>
+          </button>
+          <div class="panel-body" v-show="showModelSelector">
+            <label for="model-select" class="field-label">Modelo activo</label>
+            <select id="model-select" v-model="selectedModel" class="field-select" :disabled="awaitingResponse">
+              <option value="" disabled>Seleccionar modelo...</option>
+              <option v-for="model in availableModels" :key="model.name" :value="model.name">
+                {{ model.name }} ({{ model.size }})
+              </option>
+            </select>
 
-        <!-- Temperature Control Section -->
-        <div class="temperature-control-section">
-          <div class="temperature-control-header" @click="toggleTemperatureControl">
-            <span class="temperature-control-title">🌡️ Control de Temperatura</span>
-            <span class="toggle-icon" :class="{ 'expanded': showTemperatureControl }">▼</span>
-          </div>
-          <div class="temperature-control-container" v-show="showTemperatureControl">
-            <div class="temperature-control-content">
-              <label for="temperature-slider" class="temperature-label">
-                Temperatura: {{ temperature.toFixed(1) }}
-                <span class="temperature-description">
-                  ({{ temperature <= 0.3 ? 'Muy determinista' : temperature <= 0.7 ? 'Equilibrado' : temperature <= 1.2 ? 'Creativo' : 'Muy creativo' }})
+            <div v-if="selectedModelDetails" class="model-summary">
+              <div class="model-row">
+                <strong>{{ selectedModelDetails.name }}</strong>
+                <span class="status-chip" :class="selectedModelDetails.running ? 'ok' : 'idle'">
+                  {{ selectedModelDetails.running ? 'Activo' : 'Inactivo' }}
                 </span>
-              </label>
-              <div class="temperature-slider-container">
-                <input
-                  id="temperature-slider"
-                  type="range"
-                  v-model.number="temperature"
-                  min="0.0"
-                  max="2.0"
-                  step="0.1"
-                  class="temperature-slider"
-                  :disabled="awaitingResponse"
-                />
-                <div class="temperature-marks">
-                  <span>0.0</span>
-                  <span>0.5</span>
-                  <span>1.0</span>
-                  <span>1.5</span>
-                  <span>2.0</span>
-                </div>
               </div>
-              <div class="temperature-help">
-                <small>
-                  💡 Valores bajos (0.0-0.5): Respuestas más consistentes y predecibles<br>
-                  💡 Valores altos (1.0-2.0): Respuestas más creativas y variadas
-                </small>
-              </div>
+              <small>Tamaño: {{ selectedModelDetails.size }} · Modificado: {{ selectedModelDetails.modified }}</small>
+            </div>
+
+            <button class="ghost full" @click="refreshModels" :disabled="awaitingResponse || loadingModels" type="button">
+              {{ loadingModels ? 'Actualizando...' : 'Actualizar modelos' }}
+            </button>
+          </div>
+        </section>
+
+        <section class="panel card">
+          <button class="panel-header" @click="toggleTemperatureControl" type="button">
+            <span>Temperatura</span>
+            <span class="toggle-icon" :class="{ expanded: showTemperatureControl }">⌄</span>
+          </button>
+          <div class="panel-body" v-show="showTemperatureControl">
+            <label for="temperature-slider" class="field-label">
+              {{ temperature.toFixed(1) }} · {{ temperatureProfile }}
+            </label>
+            <input
+              id="temperature-slider"
+              class="temperature-slider"
+              type="range"
+              v-model.number="temperature"
+              min="0"
+              max="2"
+              step="0.1"
+              :disabled="awaitingResponse"
+            />
+            <div class="marks">
+              <span>0.0</span>
+              <span>1.0</span>
+              <span>2.0</span>
             </div>
           </div>
-        </div>
+        </section>
 
-        <!-- Stream Control Section -->
-        <div class="stream-control-section">
-          <div class="stream-control-container">
-            <label class="stream-label">
-              <input
-                type="checkbox"
-                v-model="stream"
-                :disabled="awaitingResponse"
-              />
-              Streaming
-            </label>
+        <section class="panel card stream-card">
+          <label class="stream-toggle">
+            <input type="checkbox" v-model="stream" :disabled="awaitingResponse" />
+            <span>Respuesta en streaming</span>
+          </label>
+        </section>
+      </aside>
+
+      <section class="chat card">
+        <header class="chat-header">
+          <div>
+            <h1>Ollama WebUI</h1>
+            <p>Chat local con control de modelo y parámetros</p>
           </div>
-        </div>
-      </div>
-      <div class="chat">
+          <div class="chat-tools">
+            <span v-if="selectedModel" class="chip">{{ selectedModel }}</span>
+            <button class="ghost" @click="clearConversation" :disabled="awaitingResponse || messages.length === 0" type="button">
+              Limpiar chat
+            </button>
+            <button class="warn" v-if="awaitingResponse" @click="stopGeneration" type="button">
+              Detener
+            </button>
+          </div>
+        </header>
+
         <div class="chat-box" ref="chatBox">
-          <div
+          <article
             v-for="(msg, index) in messages"
             :key="index"
             class="message"
-            :class="{ 'assistant-message': msg.role === 'assistant', 'user-message': msg.role === 'user' }"
+            :class="msg.role === 'assistant' ? 'assistant-message' : 'user-message'"
           >
-            <div class="message-header" v-if="msg.role === 'assistant'">
-              <span class="message-role">😊</span>
+            <div class="message-meta">
+              <span class="avatar">{{ msg.role === 'assistant' ? 'AI' : 'Tu' }}</span>
               <button
-                class="copy-button"
+                v-if="msg.role === 'assistant'"
+                class="ghost mini"
                 @click="copyMessage(msg.content)"
-                title="Copiar mensaje"
+                type="button"
               >
-                📋
+                Copiar
               </button>
             </div>
-            <div
-              class="message-content"
-              :class="{ 'typewriter': msg.role === 'assistant' && msg.isTyping }"
-              v-html="msg.formattedContent || msg.content"
-            ></div>
+            <div class="message-content" :class="{ typewriter: msg.role === 'assistant' && msg.isTyping }" v-html="msg.formattedContent || msg.content"></div>
+
             <div v-if="index === messages.length - 1 && awaitingResponse" class="typing-indicator">
               <div class="dot"></div>
               <div class="dot"></div>
               <div class="dot"></div>
             </div>
+          </article>
+
+          <div v-if="messages.length === 0" class="empty-state">
+            <h2>Empieza una conversación</h2>
+            <p>Selecciona un modelo y escribe tu primer prompt.</p>
           </div>
         </div>
 
-        <div class="input-group">
+        <footer class="composer">
           <textarea
             v-model="prompt"
-            placeholder="Escribe tu mensaje..."
+            placeholder="Escribe tu mensaje. Enter envia, Shift+Enter agrega salto de linea"
             @keydown.enter.exact.prevent="sendPrompt"
             :disabled="awaitingResponse"
           ></textarea>
-          <button @click="sendPrompt" :disabled="awaitingResponse">
+          <button class="solid send" @click="sendPrompt" :disabled="!canSendPrompt" type="button">
             {{ awaitingResponse ? 'Enviando...' : 'Enviar' }}
           </button>
-        </div>
+        </footer>
+      </section>
+    </main>
+
+    <div class="notifications">
+      <div v-for="item in notifications" :key="item.id" class="notification" :class="item.type">
+        {{ item.message }}
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { markRaw } from 'vue';
-import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js/lib/core';
-import javascript from 'highlight.js/lib/languages/javascript';
-import python from 'highlight.js/lib/languages/python';
-import html from 'highlight.js/lib/languages/xml';
 import css from 'highlight.js/lib/languages/css';
+import javascript from 'highlight.js/lib/languages/javascript';
 import json from 'highlight.js/lib/languages/json';
 import markdown from 'highlight.js/lib/languages/markdown';
+import python from 'highlight.js/lib/languages/python';
+import html from 'highlight.js/lib/languages/xml';
+import MarkdownIt from 'markdown-it';
+import { markRaw } from 'vue';
 import systemPromptCrypto from './utils/crypto.js';
 
-// Register languages with highlight.js
 hljs.registerLanguage('javascript', javascript);
 hljs.registerLanguage('python', python);
 hljs.registerLanguage('html', html);
@@ -216,41 +191,58 @@ export default {
       prompt: '',
       messages: [],
       systemPrompt: '',
-      showSystemPrompt: false,
-      // Model selector data
+      showSystemPrompt: true,
       availableModels: [],
       selectedModel: '',
-      showModelSelector: false,
+      showModelSelector: true,
       loadingModels: false,
-      // Temperature control data
       temperature: 0.5,
-      showTemperatureControl: false,
-      // stream control
+      showTemperatureControl: true,
       stream: true,
-      md: markRaw(new MarkdownIt({
-        html: true,
-        linkify: true,
-        typographer: true,
-        highlight: function (str, lang) {
-          if (lang && hljs.getLanguage(lang)) {
-            try {
-              return '<pre class="hljs"><code class="hljs-code">' +
-                     hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
-                     '</code></pre>';
-            } catch (__) {}
-          }
-          return '<pre class="hljs"><code class="hljs-code">' + this.utils.escapeHtml(str) + '</code></pre>';
-        }
-      })),
       awaitingResponse: false,
       currentStream: null,
-      saveTimeout: null, // For debounced saving
+      saveTimeout: null,
+      notifications: [],
+      notificationCounter: 0,
+      md: markRaw(
+        new MarkdownIt({
+          html: false,
+          linkify: true,
+          typographer: true,
+          highlight(str, lang) {
+            if (lang && hljs.getLanguage(lang)) {
+              try {
+                return `<pre class="hljs"><code class="hljs-code">${hljs.highlight(str, { language: lang, ignoreIllegals: true }).value}</code></pre>`;
+              } catch (_) {
+                // Continue with escaped output.
+              }
+            }
+            return `<pre class="hljs"><code class="hljs-code">${this.utils.escapeHtml(str)}</code></pre>`;
+          }
+        })
+      )
+    };
+  },
+
+  computed: {
+    canSendPrompt() {
+      return this.prompt.trim().length > 0 && !this.awaitingResponse;
+    },
+    selectedModelDetails() {
+      return this.availableModels.find((m) => m.name === this.selectedModel) || null;
+    },
+    temperatureProfile() {
+      if (this.temperature <= 0.3) return 'Muy determinista';
+      if (this.temperature <= 0.7) return 'Equilibrado';
+      if (this.temperature <= 1.2) return 'Creativo';
+      return 'Muy creativo';
     }
   },
 
   async mounted() {
     this.VITE_SERVER_BASE_URL = import.meta.env.VITE_SERVER_BASE_URL || '';
     this.scrollToBottom();
+    this.loadUiState();
     await this.loadSystemPrompt();
     this.loadTemperature();
     this.loadStream();
@@ -258,12 +250,10 @@ export default {
   },
 
   watch: {
-    systemPrompt(newValue) {
-      // Debounced save to avoid too frequent localStorage writes
+    systemPrompt() {
       this.debounceSaveSystemPrompt();
     },
     selectedModel(newValue) {
-      // Save selected model to localStorage
       if (newValue) {
         localStorage.setItem('ollama-webui-selected-model', newValue);
       } else {
@@ -271,68 +261,65 @@ export default {
       }
     },
     temperature(newValue) {
-      // Save temperature to localStorage
       localStorage.setItem('ollama-webui-temperature', newValue.toString());
     },
     stream(newValue) {
-      // Save strem to localStorage
       localStorage.setItem('ollama-webui-stream', newValue.toString());
+    },
+    showSystemPrompt() {
+      this.saveUiState();
+    },
+    showModelSelector() {
+      this.saveUiState();
+    },
+    showTemperatureControl() {
+      this.saveUiState();
     }
   },
 
   beforeUnmount() {
+    if (this.currentStream) {
+      this.currentStream.abort();
+      this.currentStream = null;
+    }
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
-      // Save immediately if there was a pending save to avoid data loss
       this.saveSystemPrompt();
     }
   },
 
   methods: {
     async sendPrompt() {
-      if (!this.prompt.trim() || this.awaitingResponse) return;
+      if (!this.canSendPrompt) return;
 
+      const trimmedPrompt = this.prompt.trim();
       const userMessage = {
         role: 'user',
-        content: this.prompt.trim(),
-        formattedContent: this.md.render(this.prompt.trim())
+        content: trimmedPrompt,
+        formattedContent: this.md.render(trimmedPrompt)
       };
 
       this.messages.push(userMessage);
       this.prompt = '';
       this.awaitingResponse = true;
 
-      // Crear mensaje vacío del asistente
       const aiMessage = {
         role: 'assistant',
         content: '',
         formattedContent: '',
-        isTyping: true,
+        isTyping: true
       };
       this.messages.push(aiMessage);
-
-      // Prepare messages for API call
-      const messagesToSend = [];
-
-      // Add system message if present
-      if (this.systemPrompt.trim()) {
-        messagesToSend.push({
-          role: 'system',
-          content: this.systemPrompt.trim()
-        });
-      }
-
-      // Add conversation history (excluding the empty assistant message we just added)
-      messagesToSend.push(...this.messages
-        .slice(0, -1)
-        .map(msg => ({ role: msg.role, content: msg.content })));
+      this.smoothScrollToBottom();
 
       try {
+        this.currentStream = new AbortController();
         const response = await fetch(`${this.VITE_SERVER_BASE_URL}/api/ollama`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: this.currentStream.signal,
           body: JSON.stringify({
-            messages: messagesToSend,
+            messages: this.buildMessagesToSend(),
             model: this.selectedModel || undefined,
             temperature: this.temperature,
             stream: this.stream
@@ -344,179 +331,197 @@ export default {
           throw new Error(`Error ${response.status}: ${errorText}`);
         }
 
-        const reader = response.body
-          .pipeThrough(new TextDecoderStream())
-          .pipeThrough(this.createLineTransformer())
-          .getReader();
-
-        let buffer = '';
-        let done = false;
-
-        while (!done) {
-          const { value, done: streamDone } = await reader.read();
-          done = streamDone;
-
-          if (value) {
-            buffer += value;
-
-            // Procesar todos los JSON completos en el buffer
-            let lineBreakIndex;
-
-            while ((lineBreakIndex = buffer.indexOf('\n')) >= 0) {
-              const line = buffer.slice(0, lineBreakIndex).trim();
-              buffer = buffer.slice(lineBreakIndex + 1);
-
-              if (line) {
-                try {
-                  const chunk = JSON.parse(line);
-                  if (chunk.message?.content) {
-                    aiMessage.content += chunk.message.content;
-                    const preprocessedContent = this.preprocessThinkingTags(aiMessage.content);
-                    aiMessage.formattedContent = this.md.render(preprocessedContent);
-                    this.messages = [...this.messages];
-                  }
-                } catch (error) {
-                  console.error('Error parsing JSON chunk:', line, error);
-                }
-              }
-            }
+        if (this.stream) {
+          await this.consumeStreamResponse(response, aiMessage);
+        } else {
+          const data = await response.json();
+          const content = data?.response || data?.message?.content;
+          if (!content) {
+            throw new Error('Respuesta no valida del servidor');
           }
+          aiMessage.content = content;
+          aiMessage.formattedContent = this.md.render(this.preprocessThinkingTags(content));
+          this.messages = [...this.messages];
         }
 
-        // Procesar cualquier dato restante en el buffer
-        if (buffer.trim()) {
-          try {
-            const chunk = JSON.parse(buffer.trim());
-            if (chunk.message?.content) {
-              aiMessage.content += chunk.message.content;
-              const preprocessedContent = this.preprocessThinkingTags(aiMessage.content);
-              aiMessage.formattedContent = this.md.render(preprocessedContent);
-              this.messages = [...this.messages];
-            }
-          } catch (error) {
-            console.error('Error parsing final chunk:', buffer, error);
-          }
-        }
-
-        // Finalizar animación de escritura
         aiMessage.isTyping = false;
-
-        // Scroll to bottom after response
         this.smoothScrollToBottom();
-
       } catch (error) {
-        console.error('Error:', error);
-        let errorMessage = 'Error de conexión con el servidor';
-
-        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-          errorMessage = 'No se puede conectar con el servidor. Verifica que esté ejecutándose.';
+        let errorMessage = 'Error de conexion con el servidor';
+        if (error.name === 'AbortError') {
+          errorMessage = 'Generacion detenida por el usuario';
+        } else if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+          errorMessage = 'No se puede conectar con el servidor. Verifica que este ejecutandose.';
         } else if (error.message) {
-          // Don't expose detailed error messages from server
-          errorMessage = 'Error procesando la solicitud. Inténtalo de nuevo.';
+          errorMessage = 'Error procesando la solicitud. Intentalo de nuevo.';
         }
 
-        aiMessage.content = `❌ **${errorMessage}**\n\n*Verifica que el servidor de Ollama esté ejecutándose en ${this.VITE_SERVER_BASE_URL}*\n\n${error.message || ''}`;
-        const preprocessedErrorContent = this.preprocessThinkingTags(aiMessage.content);
-        aiMessage.formattedContent = this.md.render(preprocessedErrorContent);
+        aiMessage.content = `❌ ${errorMessage}`;
+        aiMessage.formattedContent = this.md.render(aiMessage.content);
         aiMessage.isTyping = false;
         this.messages = [...this.messages];
-        this.showErrorNotification(errorMessage);
+        this.showNotification(errorMessage, 'error');
       } finally {
+        this.currentStream = null;
         this.awaitingResponse = false;
         this.smoothScrollToBottom();
       }
     },
 
-    /**
-     * Preprocesses AI message content to style thinking tags
-     * @param {string} content - Raw AI message content
-     * @returns {string} - Preprocessed content with styled thinking sections
-     */
+    buildMessagesToSend() {
+      const payload = [];
+      if (this.systemPrompt.trim()) {
+        payload.push({ role: 'system', content: this.systemPrompt.trim() });
+      }
+      payload.push(...this.messages.slice(0, -1).map((msg) => ({ role: msg.role, content: msg.content })));
+      return payload;
+    },
+
+    async consumeStreamResponse(response, aiMessage) {
+      if (!response.body) {
+        throw new Error('El servidor no devolvio un stream valido');
+      }
+
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        buffer += value;
+        let lineBreakIndex;
+        while ((lineBreakIndex = buffer.indexOf('\n')) >= 0) {
+          const rawLine = buffer.slice(0, lineBreakIndex);
+          buffer = buffer.slice(lineBreakIndex + 1);
+          this.processOllamaChunk(rawLine, aiMessage);
+        }
+      }
+
+      if (buffer.trim()) {
+        this.processOllamaChunk(buffer, aiMessage);
+      }
+    },
+
+    processOllamaChunk(rawLine, aiMessage) {
+      if (!rawLine) return;
+
+      const line = rawLine.trim();
+      if (!line) return;
+
+      const normalizedLine = line.startsWith('data:') ? line.slice(5).trim() : line;
+      if (!normalizedLine || normalizedLine === '[DONE]') return;
+
+      try {
+        const chunk = JSON.parse(normalizedLine);
+        if (chunk.error) {
+          throw new Error(chunk.error);
+        }
+
+        const contentChunk = chunk?.message?.content || chunk?.response || '';
+        if (!contentChunk) return;
+
+        aiMessage.content += contentChunk;
+        aiMessage.formattedContent = this.md.render(this.preprocessThinkingTags(aiMessage.content));
+        this.messages = [...this.messages];
+      } catch (error) {
+        console.error('Error parsing stream chunk:', normalizedLine, error);
+      }
+    },
+
     preprocessThinkingTags(content) {
       if (!content || typeof content !== 'string') {
         return content;
       }
 
-      // Process <think> and <thinking> tags (both opening and closing)
-      let processedContent = content;
+      const asQuoteBlock = (text) =>
+        text
+          .trim()
+          .split('\n')
+          .map((line) => `> ${line}`)
+          .join('\n');
 
-      // Replace <think> tags with styled divs
-      processedContent = processedContent.replace(
-        /<think>([\s\S]*?)<\/think>/gi,
-        '<div class="ai-thinking"><span class="ai-thinking-prefix">💭:</span> $1</div>'
-      );
+      let processed = content.replace(/<think>([\s\S]*?)<\/think>/gi, (_, thought) => {
+        const quoted = asQuoteBlock(thought);
+        return `\n> 💭 Pensamiento interno\n${quoted}\n`;
+      });
 
-      // Replace <thinking> tags with styled divs
-      processedContent = processedContent.replace(
-        /<thinking>([\s\S]*?)<\/thinking>/gi,
-        '<div class="ai-thinking"><span class="ai-thinking-prefix">💭:</span> $1</div>'
-      );
+      processed = processed.replace(/<thinking>([\s\S]*?)<\/thinking>/gi, (_, thought) => {
+        const quoted = asQuoteBlock(thought);
+        return `\n> 💭 Pensamiento interno\n${quoted}\n`;
+      });
 
-      return processedContent;
+      return processed;
     },
 
-    copyMessage(content) {
-      // Check if the Clipboard API is available
+    stopGeneration() {
+      if (!this.currentStream) return;
+      this.currentStream.abort();
+    },
+
+    clearConversation() {
+      this.messages = [];
+      this.showNotification('Chat limpiado', 'success');
+    },
+
+    async copyMessage(content) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        // Use modern Clipboard API
-        navigator.clipboard.writeText(content).then(() => {
-          this.showSuccessNotification('Mensaje copiado al portapapeles');
-        }).catch(err => {
-          console.error('Error al copiar:', err);
-          this.showErrorNotification('No se pudo copiar el mensaje');
-        });
-      } else {
-        // Fallback to execCommand for older browsers or insecure contexts
-        this.copyMessageFallback(content);
+        try {
+          await navigator.clipboard.writeText(content);
+          this.showNotification('Mensaje copiado al portapapeles', 'success');
+          return;
+        } catch (_) {
+          // Try fallback below.
+        }
       }
+      this.copyMessageFallback(content);
     },
 
     copyMessageFallback(content) {
       try {
-        // Create a temporary textarea element
         const textArea = document.createElement('textarea');
         textArea.value = content;
         textArea.style.position = 'fixed';
         textArea.style.left = '-9999px';
         textArea.style.opacity = '0';
-
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
 
-        // Try to copy using the deprecated but widely supported execCommand
         const successful = document.execCommand('copy');
         document.body.removeChild(textArea);
 
-        if (successful) {
-          this.showSuccessNotification('Mensaje copiado al portapapeles');
-        } else {
-          throw new Error('execCommand failed');
+        if (!successful) {
+          throw new Error('No se pudo copiar');
         }
-      } catch (err) {
-        console.error('Error al copiar (fallback):', err);
-        this.showErrorNotification('No se pudo copiar el mensaje. Tu navegador podría no soportar esta función o necesita una conexión segura (HTTPS).');
+
+        this.showNotification('Mensaje copiado al portapapeles', 'success');
+      } catch (_) {
+        this.showNotification('No se pudo copiar el mensaje', 'error');
       }
     },
 
     toggleSystemPrompt() {
       this.showSystemPrompt = !this.showSystemPrompt;
     },
+    toggleModelSelector() {
+      this.showModelSelector = !this.showModelSelector;
+    },
+    toggleTemperatureControl() {
+      this.showTemperatureControl = !this.showTemperatureControl;
+    },
 
     clearSystemPrompt() {
       this.systemPrompt = '';
-      this.saveSystemPrompt(); // Immediately save the cleared state
-    },
-
-    usePresetPrompt() {
-      this.systemPrompt = 'Eres un asistente útil que responde de manera concisa y clara. Siempre mantén un tono profesional y amigable.';
-      // Save immediately since this is a user action
       this.saveSystemPrompt();
     },
 
-    /**
-     * Loads encrypted system prompt from localStorage
-     */
+    usePresetPrompt() {
+      this.systemPrompt = 'Eres un asistente util que responde de forma clara, breve y accionable.';
+      this.saveSystemPrompt();
+    },
+
     async loadSystemPrompt() {
       try {
         if (systemPromptCrypto.constructor.isSupported()) {
@@ -525,131 +530,90 @@ export default {
             this.systemPrompt = savedPrompt;
           }
         } else {
-          console.warn('Web Crypto API not supported, loading unencrypted system prompt as fallback');
-          const unencryptedPrompt = localStorage.getItem('ollama-webui-system-prompt-unencrypted');
-          if (unencryptedPrompt) {
-            this.systemPrompt = unencryptedPrompt;
+          const fallbackPrompt = localStorage.getItem('ollama-webui-system-prompt-unencrypted');
+          if (fallbackPrompt) {
+            this.systemPrompt = fallbackPrompt;
           }
         }
-      } catch (error) {
-        console.warn('Failed to load system prompt:', error);
+      } catch (_) {
+        this.showNotification('No se pudo recuperar el prompt del sistema', 'error');
       }
     },
 
-    /**
-     * Saves encrypted system prompt to localStorage
-     */
     async saveSystemPrompt() {
       try {
         if (systemPromptCrypto.constructor.isSupported()) {
           await systemPromptCrypto.saveSystemPrompt(this.systemPrompt);
-        } else {
-          console.warn('Web Crypto API not supported, saving unencrypted system prompt as fallback');
-          if (!this.systemPrompt || this.systemPrompt.trim() === '') {
-            localStorage.removeItem('ollama-webui-system-prompt-unencrypted');
-          } else {
-            localStorage.setItem('ollama-webui-system-prompt-unencrypted', this.systemPrompt);
-          }
+          return;
         }
-      } catch (error) {
-        console.warn('Failed to save system prompt:', error);
+        if (!this.systemPrompt || this.systemPrompt.trim() === '') {
+          localStorage.removeItem('ollama-webui-system-prompt-unencrypted');
+        } else {
+          localStorage.setItem('ollama-webui-system-prompt-unencrypted', this.systemPrompt);
+        }
+      } catch (_) {
+        this.showNotification('No se pudo guardar el prompt del sistema', 'error');
       }
     },
 
-    /**
-     * Debounced save to avoid too frequent localStorage writes
-     */
     debounceSaveSystemPrompt() {
       if (this.saveTimeout) {
         clearTimeout(this.saveTimeout);
       }
       this.saveTimeout = setTimeout(() => {
         this.saveSystemPrompt();
-      }, 1000); // Save 1 second after user stops typing
+      }, 600);
     },
 
-    showSuccessNotification(message) {
-      // Simple notification system
-      const notification = document.createElement('div');
-      notification.className = 'notification success';
-      notification.textContent = message;
-      document.body.appendChild(notification);
-
-      setTimeout(() => {
-        notification.classList.add('show');
-      }, 100);
-
-      setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => {
-          document.body.removeChild(notification);
-        }, 300);
-      }, 3000);
-    },
-
-    showErrorNotification(message) {
-      const notification = document.createElement('div');
-      notification.className = 'notification error';
-      notification.textContent = message;
-      document.body.appendChild(notification);
-
-      setTimeout(() => {
-        notification.classList.add('show');
-      }, 100);
-
-      setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => {
-          document.body.removeChild(notification);
-        }, 300);
-      }, 5000);
-    },
-
-    createLineTransformer() {
-      return new TransformStream({
-        transformer: new class {
-          constructor() {
-            this.chunks = '';
-          }
-
-          transform(chunk, controller) {
-            this.chunks += chunk;
-            const lines = this.chunks.split(/(?=\n)/); // Split conservando delimitadores
-            this.chunks = lines.pop() || '';
-            lines.forEach(line => controller.enqueue(line));
-          }
-
-          flush(controller) {
-            if (this.chunks) controller.enqueue(this.chunks);
-          }
-        }
-      });
+    showNotification(message, type = 'success') {
+      const id = ++this.notificationCounter;
+      this.notifications.push({ id, message, type });
+      window.setTimeout(() => {
+        this.notifications = this.notifications.filter((item) => item.id !== id);
+      }, type === 'error' ? 4200 : 2600);
     },
 
     smoothScrollToBottom() {
       this.$nextTick(() => {
         const container = this.$refs.chatBox;
-        if (container) {
-          container.scrollTo({
-            top: container.scrollHeight,
-            behavior: 'smooth'
-          });
-        }
+        if (!container) return;
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth'
+        });
       });
     },
 
     scrollToBottom() {
       this.$nextTick(() => {
         const container = this.$refs.chatBox;
-        if (container) {
-          container.scrollTop = container.scrollHeight;
-        }
+        if (!container) return;
+        container.scrollTop = container.scrollHeight;
       });
     },
 
-    /* Model Selector Methods */
-    toggleModelSelector() {
-      this.showModelSelector = !this.showModelSelector;
+    saveUiState() {
+      localStorage.setItem(
+        'ollama-webui-ui-state',
+        JSON.stringify({
+          showSystemPrompt: this.showSystemPrompt,
+          showModelSelector: this.showModelSelector,
+          showTemperatureControl: this.showTemperatureControl
+        })
+      );
+    },
+
+    loadUiState() {
+      try {
+        const saved = localStorage.getItem('ollama-webui-ui-state');
+        if (!saved) return;
+        const parsed = JSON.parse(saved);
+        this.showSystemPrompt = parsed.showSystemPrompt ?? this.showSystemPrompt;
+        this.showModelSelector = parsed.showModelSelector ?? this.showModelSelector;
+        this.showTemperatureControl = parsed.showTemperatureControl ?? this.showTemperatureControl;
+      } catch (_) {
+        // Ignore invalid local storage data.
+      }
     },
 
     async fetchAvailableModels() {
@@ -657,23 +621,21 @@ export default {
       try {
         const response = await fetch(`${this.VITE_SERVER_BASE_URL}/api/models`);
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          throw new Error(`HTTP ${response.status}`);
         }
+
         const data = await response.json();
         this.availableModels = data.models || [];
 
-        // Load saved model selection or use first available model
         const savedModel = localStorage.getItem('ollama-webui-selected-model');
-        if (savedModel && this.availableModels.some(m => m.name === savedModel)) {
+        if (savedModel && this.availableModels.some((m) => m.name === savedModel)) {
           this.selectedModel = savedModel;
         } else if (this.availableModels.length > 0) {
-          // Select first running model or first available model
-          const runningModel = this.availableModels.find(m => m.running);
+          const runningModel = this.availableModels.find((m) => m.running);
           this.selectedModel = runningModel ? runningModel.name : this.availableModels[0].name;
         }
-      } catch (error) {
-        console.error('Failed to fetch models:', error);
-        this.showErrorNotification('Error al cargar modelos: ' + error.message);
+      } catch (_) {
+        this.showNotification('No se pudieron cargar los modelos', 'error');
       } finally {
         this.loadingModels = false;
       }
@@ -681,846 +643,571 @@ export default {
 
     async refreshModels() {
       await this.fetchAvailableModels();
-      this.showSuccessNotification('Modelos actualizados');
-    },
-
-    getModelDetails(modelName) {
-      return this.availableModels.find(m => m.name === modelName);
-    },
-
-    /* Temperature Control Methods */
-    toggleTemperatureControl() {
-      this.showTemperatureControl = !this.showTemperatureControl;
+      this.showNotification('Modelos actualizados', 'success');
     },
 
     loadTemperature() {
       const savedTemperature = localStorage.getItem('ollama-webui-temperature');
-      if (savedTemperature) {
-        const tempValue = parseFloat(savedTemperature);
-        if (!isNaN(tempValue) && tempValue >= 0.0 && tempValue <= 2.0) {
-          this.temperature = tempValue;
-        }
+      if (!savedTemperature) return;
+      const value = Number.parseFloat(savedTemperature);
+      if (!Number.isNaN(value) && value >= 0 && value <= 2) {
+        this.temperature = value;
       }
     },
 
     loadStream() {
       const savedStream = localStorage.getItem('ollama-webui-stream');
-      if (savedStream) {
-        const streamValue = savedStream === 'true';
-        this.stream = streamValue;
-      }
+      if (!savedStream) return;
+      this.stream = savedStream === 'true';
     }
-
   }
-}
-
-// Transformador para dividir por líneas (NDJSON)
-class LineBreakTransformer {
-  constructor() {
-    this.chunks = '';
-  }
-
-  transform(chunk, controller) {
-    this.chunks += chunk;
-    const lines = this.chunks.split('\n');
-    this.chunks = lines.pop();
-    lines.forEach(line => controller.enqueue(line));
-  }
-
-  flush(controller) {
-    if (this.chunks) controller.enqueue(this.chunks);
-  }
-}
+};
 </script>
 
 <style>
-/* Import highlight.js theme */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import 'highlight.js/styles/github-dark.css';
 
-/* Estilos generales */
-body {
-  background-color: #292a2d;
-  color: #f5f5f5;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  font-size: 16px;
-  margin: 0;
-  padding: 0;
-  height: 100vh;
+:root {
+  --bg: #f6f4ef;
+  --bg-soft: #efe8dc;
+  --surface: #fffdf8;
+  --surface-2: #f9f4ea;
+  --text: #262322;
+  --muted: #665f57;
+  --line: #dccfbc;
+  --primary: #0b7a75;
+  --primary-strong: #075c58;
+  --accent: #e17a28;
+  --danger: #c63f2f;
+  --success: #2f8f55;
 }
 
-#app {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-  width: 100%;
-}
-
-/* Contenedor principal */
-.container {
-  width: 100%;
-  padding: 1rem;
-}
-
-.d-flex {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-}
-
-.flex-column {
-  flex-direction: column;
-}
-
-.flex-md-row {
-  flex-direction: row;
-}
-
-.gap-3 {
-  gap: 1rem;
-}
-
-/* Estilos del chat */
-.chat {
-  width: 50%;
-  border-radius: 8px;
-  background-color: #333;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  height: 90vh;
+* {
   box-sizing: border-box;
 }
 
+body {
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at 12% 18%, #f8ebcf 0%, transparent 42%),
+    radial-gradient(circle at 85% 10%, #d9efe8 0%, transparent 32%),
+    linear-gradient(180deg, #faf7f1 0%, #f0ebe2 100%);
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 1rem;
+  position: relative;
+  isolation: isolate;
+}
+
+.ambient-shape {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(32px);
+  z-index: -1;
+  opacity: 0.45;
+}
+
+.ambient-shape-a {
+  width: 280px;
+  height: 280px;
+  top: -60px;
+  left: -40px;
+  background: #f8d6a9;
+}
+
+.ambient-shape-b {
+  width: 320px;
+  height: 320px;
+  right: -60px;
+  bottom: 8%;
+  background: #bde6da;
+}
+
+.layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 330px 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.card {
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface), white 16%);
+  box-shadow: 0 12px 34px rgba(28, 31, 35, 0.08);
+  border-radius: 18px;
+}
+
 .sidebar {
-  width: 30%;
-  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: sticky;
+  top: 1rem;
 }
 
-/* System Prompt Section */
-.system-prompt-section {
-  background-color: #2a2a2a;
-  border-bottom: 1px solid #444;
-  border-radius: 8px 8px 0 0;
+.panel {
+  overflow: clip;
 }
 
-.system-prompt-header {
+.panel-header {
+  width: 100%;
+  border: 0;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.8rem 1rem;
+  padding: 0.85rem 1rem;
   cursor: pointer;
-  transition: background-color 0.2s ease;
-  user-select: none;
-}
-
-.system-prompt-header:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.system-prompt-title {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #f5f5f5;
 }
 
 .toggle-icon {
-  transition: transform 0.2s ease;
-  font-size: 0.8rem;
-  color: #888;
+  transition: transform 0.18s ease;
 }
 
 .toggle-icon.expanded {
   transform: rotate(180deg);
 }
 
-.system-prompt-container {
-  padding: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+.panel-body {
+  padding: 0.85rem 1rem 1rem;
 }
 
-.system-prompt-input {
-  width: 100%;
-  min-height: 80px;
-  padding: 0.8rem;
-  border: 1px solid #555;
-  border-radius: 6px;
-  background-color: #444;
-  color: #f5f5f5;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+.field-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--muted);
   font-size: 0.9rem;
+}
+
+.field-textarea,
+.field-select,
+.composer textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--text);
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  font-family: inherit;
   resize: vertical;
-  box-sizing: border-box;
-  transition: border-color 0.2s ease;
 }
 
-.system-prompt-input:focus {
-  outline: none;
-  border-color: #4166d5;
-  box-shadow: 0 0 0 2px rgba(65, 102, 213, 0.2);
+.field-textarea:focus,
+.field-select:focus,
+.composer textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--primary), white 70%);
+  border-color: color-mix(in srgb, var(--primary), white 35%);
 }
 
-.system-prompt-input::placeholder {
-  color: #888;
-  font-style: italic;
+.field-textarea {
+  min-height: 94px;
 }
 
-.system-prompt-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.8rem;
-  justify-content: flex-end;
-}
-
-.clear-button, .preset-button {
-  padding: 0.5rem 1rem;
-  border: 1px solid #555;
-  border-radius: 4px;
-  background-color: #444;
-  color: #f5f5f5;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.clear-button:hover {
-  background-color: #dc3545;
-  border-color: #dc3545;
-}
-
-.preset-button:hover {
-  background-color: #4166d5;
-  border-color: #4166d5;
-}
-
-.clear-button:disabled, .preset-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background-color: #444;
-  border-color: #555;
-}
-
-.clear-button:disabled:hover, .preset-button:disabled:hover {
-  background-color: #444;
-  border-color: #555;
-}
-
-/* Model Selector Section */
-.model-selector-section {
-  background-color: #2a2a2a;
-  border-bottom: 1px solid #444;
-  margin-top: 1px;
-}
-
-.model-selector-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.8rem 1rem;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  user-select: none;
-}
-
-.model-selector-header:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.model-selector-title {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #f5f5f5;
-}
-
-.model-selector-container {
-  padding: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.model-selector-content {
-  margin-bottom: 0.8rem;
-}
-
-.model-label {
-  display: block;
-  color: #f5f5f5;
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-}
-
-.model-select {
-  width: 100%;
-  padding: 0.8rem;
-  border: 1px solid #555;
-  border-radius: 6px;
-  background-color: #444;
-  color: #f5f5f5;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: border-color 0.2s ease;
-}
-
-.model-select:focus {
-  outline: none;
-  border-color: #4166d5;
-  box-shadow: 0 0 0 2px rgba(65, 102, 213, 0.2);
-}
-
-.model-select option {
-  background-color: #444;
-  color: #f5f5f5;
-}
-
-.model-select option.running-model {
-  font-weight: 600;
-}
-
-.model-info {
-  margin-top: 0.8rem;
-  padding: 0.8rem;
-  background-color: #333;
-  border-radius: 6px;
-  border: 1px solid #555;
-}
-
-.model-details {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.model-name {
-  font-weight: 600;
-  color: #f5f5f5;
-  font-size: 0.95rem;
-}
-
-.status-badge {
-  padding: 0.2rem 0.6rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.status-badge.running {
-  background-color: #22bb22;
-  color: white;
-}
-
-.status-badge.stopped {
-  background-color: #666;
-  color: #ccc;
-}
-
-.running-badge {
-  color: #22bb22;
-  font-weight: 600;
-}
-
-.model-meta {
-  color: #888;
-  font-size: 0.8rem;
-}
-
-.model-actions {
+.inline-actions {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+  margin-top: 0.65rem;
 }
 
-.refresh-button {
-  padding: 0.5rem 1rem;
-  border: 1px solid #555;
-  border-radius: 4px;
-  background-color: #444;
-  color: #f5f5f5;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.refresh-button:hover:not(:disabled) {
-  background-color: #4166d5;
-  border-color: #4166d5;
-}
-
-.refresh-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background-color: #444;
-  border-color: #555;
-}
-
-/* Temperature Control Section */
-.temperature-control-section {
-  background-color: #2a2a2a;
-  border-bottom: 1px solid #444;
-  margin-top: 1px;
-}
-
-.temperature-control-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.8rem 1rem;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  user-select: none;
-}
-
-.temperature-control-header:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.temperature-control-title {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #f5f5f5;
-}
-
-.temperature-control-container {
-  padding: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.temperature-control-content {
-  margin-bottom: 0.8rem;
-}
-
-.temperature-label {
-  display: block;
-  color: #f5f5f5;
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin-bottom: 1rem;
-}
-
-.temperature-description {
-  font-size: 0.8rem;
-  color: #888;
-  font-weight: normal;
-  margin-left: 0.5rem;
-}
-
-.temperature-slider-container {
-  position: relative;
-  margin-bottom: 1rem;
-}
-
-.temperature-slider {
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #4CAF50 0%, #FFC107 50%, #FF5722 100%);
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-  cursor: pointer;
-}
-
-.temperature-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #f5f5f5;
-  cursor: pointer;
-  border: 2px solid #4166d5;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s ease;
-}
-
-.temperature-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.1);
-}
-
-.temperature-slider::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #f5f5f5;
-  cursor: pointer;
-  border: 2px solid #4166d5;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.temperature-slider:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.temperature-slider:disabled::-webkit-slider-thumb {
-  cursor: not-allowed;
-  background: #666;
-  border-color: #555;
-}
-
-.temperature-marks {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 0.5rem;
-  font-size: 0.7rem;
-  color: #888;
-}
-
-.temperature-help {
-  color: #888;
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
-.stream-control-section {
-  background-color: #2a2a2a;
-  border-bottom: 1px solid #444;
-  margin-top: 1px;
-}
-
-.stream-control-container {
-  padding: 0.8rem 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Contenedor de mensajes */
-.chat-box {
-  flex: 1;
-  padding: 3rem;
-  margin-bottom: 0.5rem;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #444 #333;
-  border-bottom: 1px solid #444;
-  box-sizing: border-box; /* Asegura que el padding no afecte el ancho */
-  scroll-behavior: smooth;
-}
-
-/* Estilos de los mensajes */
-.message {
-  margin-bottom: 1.5rem;
-  padding: 1.2rem;
-  border-radius: 12px;
-  word-wrap: break-word;
-  position: relative;
-}
-
-/* Header del mensaje */
-.message-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.8rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.message-role {
-  font-size: 0.9rem;
-  font-weight: 600;
-  opacity: 0.8;
-}
-
-/* Botón de copiar */
-.copy-button {
-  background: rgba(65, 102, 213, 0.2);
-  border: 1px solid rgba(65, 102, 213, 0.3);
-  color: #f5f5f5;
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: all 0.2s ease;
-}
-
-.copy-button:hover {
-  background: rgba(65, 102, 213, 0.3);
-  border-color: rgba(65, 102, 213, 0.5);
-  transform: translateY(-1px);
-}
-
-.copy-button:active {
-  transform: translateY(0);
-}
-
-/* Mensajes del usuario */
-.user-message {
-  background: linear-gradient(135deg, #41415850, #41415870);
-  color: white;
-  border-left: 3px solid #4166d5;
-  margin-left: 2rem;
-}
-
-/* Mensajes del asistente */
-.assistant-message {
-  background: linear-gradient(135deg, rgba(34, 139, 34, 0.1), rgba(34, 139, 34, 0.05));
-  color: white;
-  border-left: 3px solid #22bb22;
-  margin-right: 2rem;
-}
-
-/* Contenido del mensaje */
-.message-content {
-  line-height: 1.6;
-}
-
-/* Animación typewriter */
-.typewriter {
-  overflow: hidden;
-  border-right: 2px solid #22bb22;
-  animation: blink-caret 1.2s step-end infinite;
-}
-
-@keyframes blink-caret {
-  from, to { border-color: transparent }
-  50% { border-color: #22bb22 }
-}
-
-/* Indicador de escritura */
-.typing-indicator {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  margin-top: 1rem;
-  opacity: 0.7;
-}
-
-.typing-indicator .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #22bb22;
-  animation: typing-dots 1.4s infinite ease-in-out;
-}
-
-.typing-indicator .dot:nth-child(1) { animation-delay: -0.32s; }
-.typing-indicator .dot:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes typing-dots {
-  0%, 80%, 100% {
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1.2);
-    opacity: 1;
-  }
-}
-
-/* Grupo de entrada de texto */
-.input-group {
-  display: flex;
-  gap: 0.5rem;
-  padding: 1rem;
-  box-sizing: border-box;
-}
-
-/* Textarea */
-textarea {
-  flex: 1;
-  padding: 0.9rem;
-  border: none;
-  border-radius: 4px;
-  background-color: #555;
-  color: white;
-  resize: none;
-  box-sizing: border-box;
-  scrollbar-width: thin;
-  scrollbar-color: #444 #555;
-}
-
-textarea:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(65, 102, 213, 0.3);
-}
-
-/* Botón de enviar */
 button {
-  padding: 0.9rem 1.5rem;
-  background: #4166d5;
-  color: white;
-  border: none;
-  border-radius: 4px;
+  border: 0;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  font-weight: 500;
+  font-family: inherit;
+  font-weight: 700;
+  transition: transform 0.16s ease, opacity 0.16s ease, background-color 0.16s ease;
 }
 
-button:hover {
-  background: #2f4f9f;
+button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
 button:disabled {
-  background: #555;
+  opacity: 0.55;
   cursor: not-allowed;
-  transform: none;
 }
 
-/* Estilos mejorados para markdown */
-.message-content h1, .message-content h2, .message-content h3,
-.message-content h4, .message-content h5, .message-content h6 {
-  margin: 1.5rem 0 1rem 0;
+.solid {
+  background: var(--primary);
+  color: #ffffff;
+  padding: 0.6rem 0.85rem;
+}
+
+.solid:hover:not(:disabled) {
+  background: var(--primary-strong);
+}
+
+.ghost {
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 0.58rem 0.85rem;
+}
+
+.warn {
+  background: var(--danger);
   color: #fff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  padding-bottom: 0.5rem;
+  padding: 0.58rem 0.85rem;
 }
 
-.message-content h1 { font-size: 1.8rem; }
-.message-content h2 { font-size: 1.5rem; }
-.message-content h3 { font-size: 1.3rem; }
-
-.message-content p {
-  margin: 0.8rem 0;
-  line-height: 1.7;
-}
-
-.message-content ul, .message-content ol {
-  margin: 1rem 0;
-  padding-left: 2rem;
-}
-
-.message-content li {
-  margin: 0.5rem 0;
-}
-
-.message-content a {
-  color: #4166d5;
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: all 0.2s ease;
-}
-
-.message-content a:hover {
-  border-bottom-color: #4166d5;
-  color: #5577dd;
-}
-
-/* Estilos mejorados para código */
-.message-content code {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-  font-size: 0.9rem;
-  color: #ff6b6b;
-}
-
-.message-content pre {
-  background: #1e1e1e !important;
-  padding: 1.5rem !important;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 1.5rem 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  position: relative;
-}
-
-.message-content pre code {
-  background: none !important;
-  padding: 0 !important;
-  color: #f8f8f2 !important;
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-/* Estilo para tablas */
-.message-content table {
-  border-collapse: collapse;
+.full {
   width: 100%;
-  margin: 1.5rem 0;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
+  margin-top: 0.7rem;
+}
+
+.marks {
+  margin-top: 0.45rem;
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+
+.temperature-slider {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.stream-card {
+  padding: 0.6rem 1rem;
+}
+
+.stream-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.model-summary {
+  margin-top: 0.75rem;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: #fff;
+}
+
+.model-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.status-chip {
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.65rem;
+}
+
+.status-chip.ok {
+  background: color-mix(in srgb, var(--success), white 80%);
+  color: #23653d;
+}
+
+.status-chip.idle {
+  background: #ece8e3;
+  color: #7f7568;
+}
+
+.chat {
+  min-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
-.message-content th, .message-content td {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0.8rem 1rem;
-  text-align: left;
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, rgba(230, 247, 242, 0.8), rgba(252, 241, 223, 0.8));
 }
 
-.message-content th {
-  background: rgba(255, 255, 255, 0.1);
-  font-weight: 600;
-  color: #fff;
+.chat-header h1 {
+  font-size: clamp(1.1rem, 2vw, 1.45rem);
+  margin: 0;
 }
 
-.message-content tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.02);
+.chat-header p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
-/* Blockquotes */
-.message-content blockquote {
-  border-left: 4px solid #4166d5;
-  margin: 1.5rem 0;
-  padding: 1rem 1.5rem;
-  font-style: italic;
+.chat-tools {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-/* AI Thinking Tags Styling */
-.message-content .ai-thinking,
-.message-content thinking,
-think {
-  color: #888;
+.chip {
+  background: color-mix(in srgb, var(--primary), white 84%);
+  color: var(--primary-strong);
+  border-radius: 999px;
+  padding: 0.34rem 0.74rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  align-self: center;
+}
+
+.chat-box {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.1rem;
+  scroll-behavior: smooth;
+}
+
+.message {
+  border-radius: 14px;
+  margin-bottom: 0.85rem;
+  padding: 0.9rem;
+  border: 1px solid transparent;
+}
+
+.user-message {
+  margin-left: 2.5rem;
+  background: #fff;
+  border-color: #e4d6c4;
+}
+
+.assistant-message {
+  margin-right: 2.5rem;
+  background: #f9fffc;
+  border-color: #cae9de;
+}
+
+.message-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.55rem;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 0.77rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.mini {
+  font-size: 0.78rem;
+  padding: 0.34rem 0.6rem;
+}
+
+.message-content {
+  line-height: 1.6;
+  font-size: 0.98rem;
+}
+
+.typewriter {
+  border-right: 2px solid color-mix(in srgb, var(--primary), white 50%);
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  from,
+  to {
+    border-color: transparent;
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--primary), white 50%);
+  }
+}
+
+.typing-indicator {
+  display: flex;
+  gap: 0.28rem;
+  margin-top: 0.45rem;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes pulse {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  40% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+.empty-state {
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  padding: 1.4rem;
+  text-align: center;
+  color: var(--muted);
+  background: #fff;
+}
+
+.empty-state h2 {
+  margin: 0 0 0.3rem;
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.composer {
+  border-top: 1px solid var(--line);
+  padding: 0.85rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.composer textarea {
+  min-height: 74px;
+  max-height: 220px;
+}
+
+.send {
+  height: fit-content;
+  padding: 0.72rem 1rem;
+}
+
+.message-content pre {
+  border-radius: 10px;
+  overflow-x: auto;
+  border: 1px solid #394049;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.message-content code {
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 0.9em;
-  line-height: 0.5;
-  margin: 1rem 0;
-  font-style: italic;
 }
 
-.message-content .ai-thinking-prefix {
-  font-weight: 600;
-  color: #999;
-  font-style: normal;
-  margin-right: 0.5rem;
-}
-
-/* Notificaciones */
-.notification {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  padding: 1rem 1.5rem;
+.message-content :not(pre) > code {
+  background: color-mix(in srgb, var(--surface-2), white 15%);
+  border: 1px solid var(--line);
   border-radius: 6px;
+  padding: 0.1rem 0.34rem;
+}
+
+.message-content blockquote {
+  margin: 0.8rem 0;
+  border-left: 3px solid var(--accent);
+  padding: 0.5rem 0.8rem;
+  color: #5b524a;
+  background: rgba(225, 122, 40, 0.08);
+}
+
+.notifications {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  z-index: 40;
+}
+
+.notification {
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
   color: white;
-  font-weight: 500;
-  z-index: 1000;
-  transform: translateX(100%);
-  transition: all 0.3s ease;
-  min-width: 200px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 .notification.success {
-  background: linear-gradient(135deg, #a8d5ba, #c3e6cb);
+  background: var(--success);
 }
 
 .notification.error {
-  background: linear-gradient(135deg, #dc3545, #c82333);
+  background: var(--danger);
 }
 
-.notification.show {
-  transform: translateX(0);
+@media (max-width: 1024px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    top: auto;
+  }
+
+  .chat {
+    min-height: 70vh;
+  }
 }
 
-/* Responsividad */
-@media (max-width: 768px) {
-  .container {
-    padding: 0.5rem;
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 0.65rem;
   }
 
-  .message {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    padding: 1rem;
+  .chat-header {
+    flex-direction: column;
   }
 
-  .chat-box {
-    padding: 1rem;
+  .user-message,
+  .assistant-message {
+    margin-inline: 0;
+  }
+
+  .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .send {
+    width: 100%;
+  }
+
+  .notifications {
+    left: 0.65rem;
+    right: 0.65rem;
+    top: 0.65rem;
   }
 }
 </style>
