@@ -2,7 +2,7 @@
 
 Ollama WebUI is a minimalist, easy-to-use web interface built with **FastAPI** and **Vue.js**, designed to interact with local AI models via [Ollama](https://ollama.com/).
 
-<img width="1234" height="876" alt="image" src="https://github.com/user-attachments/assets/0dd4c163-446e-457f-92da-deb7805cf6d0" />
+<img width="1604" height="913" alt="image" src="https://github.com/user-attachments/assets/811ea400-1ae5-49c7-88c4-cbed69ead53e" />
 
 ## Features
 - Simple, responsive web interface.
