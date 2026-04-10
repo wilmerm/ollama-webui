@@ -1,8 +1,9 @@
 import os
+import json
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,7 +11,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from pydantic_settings import BaseSettings
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 import httpx
 from dotenv import load_dotenv
 
@@ -18,6 +19,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
+
+
+def get_ollama_base_url() -> str:
+    return os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+
+
+def build_timeout(default_seconds: float) -> httpx.Timeout:
+    # Separate connect and read windows for large model responses.
+    return httpx.Timeout(connect=10.0, read=default_seconds, write=10.0, pool=10.0)
+
+
+def extract_ollama_error(status_code: int, body: str) -> str:
+    try:
+        payload = json.loads(body)
+        if isinstance(payload, dict) and payload.get("error"):
+            return str(payload["error"])
+    except Exception:
+        pass
+
+    if body:
+        return body[:300]
+    return f"Ollama returned status {status_code}"
 
 class Message(BaseModel):
     role: str = Field(..., pattern="^(user|assistant|system)$")
@@ -84,17 +107,20 @@ async def add_security_headers(request, call_next):
     return response
 
 
-async def generate_ollama_stream(ollama_url: str, json: dict, timeout: int = 60):
-    async with httpx.AsyncClient() as client:  # Cliente dentro del generador
+async def generate_ollama_stream(ollama_url: str, payload: dict, timeout: float = 60.0):
+    async with httpx.AsyncClient() as client:
         async with client.stream(
             "POST",
             ollama_url,
-            json=json,
-            timeout=timeout,
+            json=payload,
+            timeout=build_timeout(timeout),
         ) as response:
             if response.status_code != 200:
                 error_detail = await response.text()
-                raise HTTPException(status_code=response.status_code, detail=error_detail)
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=extract_ollama_error(response.status_code, error_detail),
+                )
 
             async for chunk in response.aiter_bytes():  # Transmite chunk por chunk
                 yield chunk
@@ -106,17 +132,23 @@ async def get_models():
     Get available models from Ollama API.
     Returns a list of models with their details and running status.
     """
-    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_base_url = get_ollama_base_url()
 
     try:
         async with httpx.AsyncClient() as client:
             # List of available models
-            list_resp = await client.get(f"{ollama_base_url}/api/tags", timeout=10)
+            list_resp = await client.get(
+                f"{ollama_base_url}/api/tags",
+                timeout=build_timeout(10),
+            )
             if list_resp.status_code != 200:
                 raise HTTPException(status_code=503, detail="Ollama API is not available")
 
             # List of running models
-            ps_resp = await client.get(f"{ollama_base_url}/api/ps", timeout=10)
+            ps_resp = await client.get(
+                f"{ollama_base_url}/api/ps",
+                timeout=build_timeout(10),
+            )
             if ps_resp.status_code != 200:
                 raise HTTPException(status_code=503, detail="Ollama API is not available")
 
@@ -139,6 +171,8 @@ async def get_models():
             "running_models": list(running_models)
         }
 
+    except HTTPException as he:
+        raise he
     except httpx.ConnectError:
         logging.error("Cannot connect to Ollama service")
         raise HTTPException(status_code=503, detail="AI service unavailable")
@@ -153,7 +187,7 @@ async def get_models():
 @app.post("/api/ollama")
 async def ask_ollama(request: ChatRequest):
 
-    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_base_url = get_ollama_base_url()
     ollama_url = f"{ollama_base_url}/api/chat"
 
     # El tiempo de espera es importante ajustarlo a la capacidad de la API
@@ -164,7 +198,7 @@ async def ask_ollama(request: ChatRequest):
     model = request.model or default_model
 
     default_temperature = float(os.getenv("DEFAULT_TEMPERATURE", 0.5) or 0.5)
-    temperature = request.temperature or default_temperature
+    temperature = request.temperature if request.temperature is not None else default_temperature
 
     messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
     stream = request.stream
@@ -176,7 +210,7 @@ async def ask_ollama(request: ChatRequest):
             return StreamingResponse(
                 generate_ollama_stream(
                     ollama_url,
-                    json={
+                    payload={
                         "model": model,
                         "messages": messages,
                         "stream": True,
@@ -200,13 +234,25 @@ async def ask_ollama(request: ChatRequest):
                             "temperature": temperature,
                         },
                     },
-                    timeout=default_timeout,
+                    timeout=build_timeout(default_timeout),
                 )
+                if response.status_code != 200:
+                    error_text = response.text
+                    detail = extract_ollama_error(response.status_code, error_text)
+                    logging.error(f"Ollama API error ({response.status_code}): {detail}")
+                    raise HTTPException(status_code=response.status_code, detail=detail)
+
                 response_data = response.json()
                 if response_data.get("error"):
-                    logging.error(f"Ollama API error: {response_data['error']}")
-                    raise HTTPException(status_code=400, detail="AI service error occurred")
-                return {"response": response_data["message"]["content"]}
+                    detail = str(response_data["error"])
+                    logging.error(f"Ollama API error: {detail}")
+                    raise HTTPException(status_code=400, detail=detail)
+
+                content = response_data.get("message", {}).get("content")
+                if content is None:
+                    raise HTTPException(status_code=502, detail="Invalid AI service response")
+
+                return {"response": content}
 
     except HTTPException as he:
         raise he
